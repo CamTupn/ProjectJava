@@ -115,6 +115,7 @@ ProjectJava/
 ├── README.md
 ├── CONTRIBUTING.md
 ├── .gitignore
+├── .github/PULL_REQUEST_TEMPLATE.md
 ├── docs/
 │   ├── project-brief-scentStation.md
 │   ├── software-requirement-specification.md
@@ -129,7 +130,10 @@ ProjectJava/
 ├── frontend/
 │   └── README.md
 └── iot/
-    └── README.md
+    ├── README.md
+    ├── simulator/
+    ├── protocol/
+    └── firmware/
 ```
 
 Một số thư mục/module có thể chưa chứa mã nguồn ở giai đoạn hiện tại. Chỉ bổ sung cấu trúc chi tiết khi có nhu cầu thực tế.
