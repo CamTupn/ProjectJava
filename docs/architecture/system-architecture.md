@@ -51,9 +51,9 @@ flowchart TB
 | Kiosk / ESP32 | Thiết bị thực hiện phun và báo trạng thái |
 | Audit & Monitoring | Ghi nhận hoạt động quan trọng, lỗi và thông tin đối soát |
 
-**Ghi chú về IoT:** Trong giai đoạn phát triển, nhóm có thể sử dụng simulator để mô phỏng thiết bị và phản hồi MQTT. Việc có triển khai gateway riêng hay để thiết bị kết nối trực tiếp với broker sẽ được thống nhất trong thiết kế chi tiết. Dù chọn phương án nào, lệnh phun phải được xác thực, giới hạn đúng máy/khe và có cơ chế phát hiện lệnh trùng.
+**Ghi chú về IoT:** Trong giai đoạn phát triển, nhóm ưu tiên dùng IoT simulator để mô phỏng trạng thái thiết bị và phản hồi MQTT. Kiến trúc logic thể hiện MQTT Broker là thành phần trung gian trao đổi thông điệp. Gateway riêng chỉ được triển khai nếu nhóm xác nhận cần thiết trong thiết kế chi tiết. Dù kết nối trực tiếp hay qua gateway, mọi lệnh phun phải được xác thực, giới hạn đúng máy/khe và có cơ chế chống xử lý lệnh trùng.
 
-Ranh giới triển khai vật lý giữa backend, gateway và kiosk sẽ được chốt trong thiết kế chi tiết. Sơ đồ trên là kiến trúc logic mức cao.
+Ranh giới triển khai vật lý giữa backend, broker, gateway và thiết bị sẽ được thống nhất trong thiết kế chi tiết. Sơ đồ hiện tại mô tả kiến trúc logic mức cao.
 
 ## 4. Các module backend đề xuất
 
@@ -103,6 +103,15 @@ scentstation/{machineId}/event
 
 Topic và payload còn là bản nháp. Mỗi lệnh điều khiển cần `commandId` duy nhất, `machineId`, định danh khe, loại lệnh và thông tin xác thực/thời hạn phù hợp. Gateway hoặc thiết bị phải phát hiện lệnh lặp và không thực hiện lại lệnh đã xử lý thành công.
 
+Các quy tắc giao tiếp MQTT:
+
+- Mỗi lệnh phun phải có `commandId` duy nhất, `machineId`, `slotId`, `orderId` và thời hạn hợp lệ.
+- Chỉ thiết bị hoặc gateway được xác thực và được phép điều khiển máy tương ứng mới được xử lý lệnh.
+- Thiết bị/gateway phải kiểm tra `commandId` để phát hiện lệnh trùng và lưu trạng thái xử lý đủ để hỗ trợ đối soát.
+- QoS của MQTT không thay thế cơ chế chống lệnh trùng ở tầng ứng dụng.
+- Khi nhận lệnh hết hạn, sai máy/khe hoặc không đáp ứng điều kiện an toàn, thiết bị/gateway phải từ chối thực hiện và gửi sự kiện phù hợp.
+- Phản hồi phải chứa `commandId` để backend đối chiếu với lệnh đã gửi.
+
 ### 5.4 Backend đến hệ thống thanh toán
 - Môi trường phát triển nên dùng sandbox hoặc mock provider.
 - Chỉ backend xác minh callback/thông báo theo cơ chế của provider mới được đánh dấu giao dịch thành công.
@@ -115,27 +124,47 @@ Topic và payload còn là bản nháp. Mỗi lệnh điều khiển cần `comm
 sequenceDiagram
     actor Customer as Khách hàng
     participant UI as Kiosk UI
-    participant API as Backend
+    participant API as Backend Spring Boot
     participant DB as MySQL
     participant Pay as Payment Provider
     participant MQTT as MQTT Broker
-    participant Device as Kiosk Device
+    participant Device as Kiosk Device / Simulator
 
     Customer->>UI: Chọn sản phẩm
-    UI->>API: Tạo đơn hàng
-    API->>DB: Lưu đơn chờ thanh toán
-    API-->>UI: Mã đơn / thông tin thanh toán
-    UI->>Pay: Thanh toán QR
-    Pay-->>API: Callback thanh toán
-    API->>API: Xác minh và chống callback trùng
-    API->>DB: Ghi nhận thanh toán hợp lệ
-    API->>API: Kiểm tra máy, khe và điều kiện phun
-    API->>MQTT: Gửi lệnh phun có commandId
-    MQTT->>Device: Chuyển lệnh
-    Device-->>MQTT: Kết quả có commandId
-    MQTT-->>API: Chuyển kết quả
-    API->>DB: Ghi kết quả phun và cập nhật tồn kho theo quy tắc
-    API-->>UI: Trạng thái đơn hàng
+    UI->>API: Yêu cầu tạo đơn hàng
+    API->>DB: Lưu đơn PENDING_PAYMENT
+    API-->>UI: Trả mã đơn và thông tin QR
+
+    Customer->>Pay: Thanh toán bằng QR
+    Pay-->>API: Gửi callback / thông báo thanh toán
+    API->>API: Xác minh thanh toán và chống callback trùng
+
+    alt Thanh toán không hợp lệ hoặc thất bại
+        API->>DB: Ghi nhận kết quả thanh toán
+        API-->>UI: Thông báo thanh toán thất bại
+    else Thanh toán hợp lệ
+        API->>DB: Ghi nhận thanh toán thành công
+        API->>API: Kiểm tra máy, khe và điều kiện an toàn
+
+        alt Máy hoặc khe không đủ điều kiện
+            API->>DB: Ghi nhận trạng thái cần xử lý
+            API-->>UI: Thông báo chưa thể thực hiện phun
+        else Máy và khe đủ điều kiện
+            API->>MQTT: Gửi lệnh có commandId duy nhất
+            MQTT->>Device: Chuyển lệnh phun
+            Device->>Device: Kiểm tra an toàn và chống lệnh trùng
+            Device-->>MQTT: Phản hồi kèm commandId
+            MQTT-->>API: Chuyển kết quả phun
+
+            alt Phun thành công được xác nhận
+                API->>DB: Ghi nhận kết quả và cập nhật tồn kho
+                API-->>UI: Cập nhật trạng thái hoàn tất
+            else Phun thất bại hoặc chưa xác định
+                API->>DB: Ghi nhận kết quả hoặc trạng thái cần đối soát
+                API-->>UI: Cập nhật trạng thái xử lý
+            end
+        end
+    end
 ```
 
 Sơ đồ là luồng logic khái quát. Thiết kế chi tiết phải xử lý callback trùng, máy mất kết nối, lệnh timeout, phản hồi lặp và kết quả phun không xác định.
@@ -160,6 +189,10 @@ Sơ đồ là luồng logic khái quát. Thiết kế chi tiết phải xử lý
 - Lệnh IoT phải được xác thực và giới hạn theo máy được phép điều khiển.
 - Ghi audit cho thao tác nhạy cảm như thay đổi quyền, thanh toán, phun, điều chỉnh tồn kho và bảo trì.
 - Log không chứa mật khẩu, token hoặc secret.
+- MQTT broker chỉ cho phép client đã xác thực truy cập các topic được cấp quyền; không cho phép thiết bị tùy ý điều khiển máy khác.
+- Các thao tác nhạy cảm cần ghi nhận người thực hiện hoặc thiết bị, thời điểm, đối tượng tác động và kết quả.
+- Không ghi thông tin xác thực, token hoặc secret vào payload/log không cần thiết.
+- Môi trường demo phải dùng cấu hình và thông tin xác thực riêng; không commit secret thật vào Git.
 
 ## 8. Xử lý lỗi và tình huống bất thường
 
@@ -175,6 +208,11 @@ Sơ đồ là luồng logic khái quát. Thiết kế chi tiết phải xử lý
 | Kết quả phun không xác định | Đánh dấu trạng thái cần đối soát; kiểm tra sự kiện và trạng thái thiết bị trước khi đưa ra quyết định tiếp theo. Không tự động gửi lại lệnh phun cho cùng đơn hàng. |
 | Thiết bị khởi động lại khi đang xử lý lệnh | Kiểm tra commandId và trạng thái xử lý đã lưu; không thực hiện lại lệnh đã xác nhận hoàn tất. Nếu không thể xác định kết quả, chuyển sang đối soát. |
 | Trạng thái máy đã cũ hoặc không đáng tin cậy | Không tiếp tục phun nếu không thể xác minh các điều kiện an toàn bắt buộc. |
+| Lệnh hết hạn hoặc sai máy/khe | Từ chối thực hiện, ghi nhận nguyên nhân và phát sự kiện phản hồi. |
+| Callback thanh toán đến đồng thời hoặc lặp lại | Dùng định danh giao dịch và cơ chế cập nhật an toàn để chỉ ghi nhận một kết quả hợp lệ. |
+| Nhiều sự kiện phun đến cho cùng một lệnh | Đối chiếu bằng `commandId`, không trừ tồn kho nhiều lần cho cùng một kết quả phun. |
+| Thanh toán thành công nhưng máy không đủ điều kiện phun | Không gửi lệnh phun; chuyển đơn sang trạng thái xử lý nghiệp vụ đã thống nhất, chẳng hạn chờ xử lý hoặc hoàn tiền. |
+| Kết quả phun chưa xác định | Không tự động tạo lệnh phun mới; chuyển sang đối soát. |
 
 ## 9. Chiến lược kiểm thử
 
@@ -185,18 +223,18 @@ Sơ đồ là luồng logic khái quát. Thiết kế chi tiết phải xử lý
 - **End-to-end test:** từ chọn sản phẩm đến kết quả phun và trạng thái tồn kho.
 - **Security test:** truy cập chéo tenant, thiếu quyền và dữ liệu đầu vào không hợp lệ.
 
-## 10. Quyết định cần nhóm thống nhất
+## 10. Các quyết định kiến trúc đề xuất
 
-- Kiosk UI và Admin Portal là một frontend hay hai ứng dụng.
-- Cơ chế xác thực và vòng đời token/session.
-- Thanh toán dùng sandbox/mock hay tích hợp thật trong phạm vi đồ án.
-- MQTT broker, QoS, xác thực thiết bị và payload.
-- Chiến lược migration database.
-- Quy tắc trạng thái đơn hàng, thanh toán và phun.
-- Cách đối soát khi thiết bị không trả về kết quả chắc chắn.
-- Cách triển khai backend, frontend, database và broker cho bản demo.
+1. **Frontend:** Sử dụng một codebase React + TypeScript, tách giao diện Kiosk UI và Admin Portal theo route, layout và quyền truy cập.
+2. **Authentication:** Sử dụng Spring Security, JWT access token và refresh token; mật khẩu được hash an toàn. Backend kiểm tra RBAC và tenant scope trên từng request.
+3. **Payment:** Ưu tiên mock/sandbox provider trong giai đoạn phát triển và demo. Backend chịu trách nhiệm xác minh thanh toán và chống xử lý callback trùng.
+4. **IoT:** Sử dụng Eclipse Mosquitto làm MQTT broker và simulator trong giai đoạn đầu. Lệnh điều khiển dùng `commandId` duy nhất, xác thực thiết bị và cơ chế chống xử lý trùng.
+5. **Database migration:** Sử dụng MySQL 8.4 LTS, Spring Data JPA và Flyway để quản lý phiên bản schema.
+6. **State management:** Thống nhất vòng đời đơn hàng, thanh toán và lệnh phun; không cho phép một đơn đã thanh toán dẫn tới nhiều hơn một lần phun thành công.
+7. **Reconciliation:** Nếu kết quả phun không xác định, ghi nhận trạng thái cần đối soát và không tự động gửi lệnh phun mới cho cùng đơn hàng.
+8. **Demo deployment:** Sử dụng Docker Compose để chuẩn hóa môi trường backend, frontend, MySQL và MQTT broker; dùng `.env.example` để hướng dẫn cấu hình và không commit secret.
 
-Không tự chốt các quyết định ảnh hưởng nhiều module khi chưa trao đổi với các thành viên liên quan.
+**Trạng thái:** Đây là các quyết định kiến trúc đề xuất để nhóm review và xác nhận trước khi triển khai. Những thay đổi ảnh hưởng đến nhiều module phải được cập nhật đồng bộ trong SRS, API contract, ERD và tài liệu IoT.
 
 ## 11. Tài liệu tiếp theo
 
@@ -206,5 +244,3 @@ Không tự chốt các quyết định ảnh hưởng nhiều module khi chưa 
 4. Khởi tạo backend, frontend và simulator theo cấu trúc đã thống nhất.
 
 ---
-
-**Trạng thái:** Bản đề xuất kiến trúc v0.1 — cần nhóm review trước khi dùng làm chuẩn triển khai.
