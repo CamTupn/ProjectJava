@@ -12,7 +12,6 @@
 | **Trạng thái** | Bản nháp để nhóm rà soát (Draft for Review) |
 | **Thời gian dự kiến** | 7 tuần |
 | **Nguồn yêu cầu chính** | Project Brief ScentStation do giảng viên cung cấp |
-| **Tài liệu liên quan** | `ScentStation_Project_Analysis_Document.docx` |
 | **Tham chiếu cấu trúc** | Cấu trúc SRS theo phong cách IEEE 830; nhóm cần xác nhận nếu giảng viên yêu cầu tuân thủ chuẩn cụ thể |
 
 > **Lưu ý:** Nội dung chức năng và quy tắc nghiệp vụ được diễn giải từ Project Brief ScentStation. Các lựa chọn như React/Next.js, PostgreSQL/MySQL, MQTT, ESP32, cách chia sprint, API và test case là đề xuất triển khai của nhóm nếu Project Brief không quy định rõ. Những nội dung chưa được xác nhận phải được nhóm đánh dấu là đề xuất, không coi là yêu cầu nguyên văn của giảng viên.
