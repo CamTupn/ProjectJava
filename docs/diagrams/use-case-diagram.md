@@ -53,7 +53,7 @@ Tài liệu này hoàn thiện phần mô tả use case cho TASK-003. Dùng `use
 - **Ngoại lệ:** Giao dịch thất bại/hết hạn thì đơn không được coi là đã thanh toán; callback trùng không được tạo xử lý lặp.
 - **Tham chiếu:** SRS-ORDER-001, SRS-PAY-001.
 
-### UC-05 — Verify Payment
+### UC-05 — Process Callback
 
 - **Actor chính:** Payment Provider.
 - **Mục tiêu:** Chỉ xác nhận thanh toán khi giao dịch được xác minh hợp lệ.
