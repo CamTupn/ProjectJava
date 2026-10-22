@@ -3,7 +3,7 @@
 
 **Document:** API Specification  
 **Version:** 0.1  
-**Status:** Draft for Review  
+**Status:** Draft for Review; not yet approved
 **API Prefix:** `/api/v1`  
 **Format:** HTTPS + REST/JSON  
 **Backend:** Java 21 + Spring Boot 3.5.x  
@@ -105,9 +105,9 @@ Recommended response:
 
 ### 1.6 Identifier convention
 
-The API uses opaque resource identifiers such as `brandId`, `productId`, `machineId`, `slotId`, `orderId`, `paymentId`, `commandId` and `maintenanceId`.
+The API uses opaque resource identifiers such as `Id`, `productId`, `machineId`, `slotId`, `orderId`, `paymentId`, `commandId` and `maintenanceId`.
 
-The exact database type/format is subject to TASK-004. API clients must not depend on the physical database key type.
+IDs are represented as opaque strings in JSON to avoid JavaScript precision issues. Database PK/FK columns use BIGINT UNSIGNED internally; the backend maps those keys to API identifiers. Prefixes such as `ord_001` are illustrative public IDs, not literal database BIGINT values. The implementation must choose and document one public-ID format consistently.
 
 ---
 
@@ -115,14 +115,13 @@ The exact database type/format is subject to TASK-004. API clients must not depe
 
 | Role | Code | Scope |
 |---|---|---|
-| Platform Super Admin | `PSA` | Entire platform |
-| Brand Admin | `BA` | Assigned brand(s) |
-| Operations Manager | `OM` | Assigned operational scope |
-| Technician | `TECH` | Assigned operational scope |
-| Inventory Staff | `INV` | Assigned inventory/brand scope |
-| Customer / Kiosk User | `CUST` | Public kiosk experience |
-| Device / Gateway | `DEV` | Authenticated device channel |
-| Payment Provider | `PAY` | Payment callback only |
+| Platform Super Admin | `PLATFORM_SUPER_ADMIN` | Entire platform |
+| Brand Admin | `BRAND_ADMINB` | Assigned tenant(s) |
+| Operations Manager | `OPERATIONS_MANAGER` | Assigned operational scope |
+| Technician | `TECHNICIAN` | Assigned operational scope |
+| Inventory Staff | `INVENTORY_STAFF` | Assigned inventory/brand scope |
+
+Integration/session principals used by this API are `PUBLIC_KIOSK` (public kiosk session), `KIOSK_DEVICE` (authenticated device/gateway), and `PAYMENT_PROVIDER` (verified payment callback). These are not database `roles` rows in the current TASK-004 model. Device authentication and public kiosk session binding must be defined separately from human-user RBAC.
 
 All protected endpoints perform authorization on the backend. Hiding a UI button is not considered authorization.
 
@@ -138,43 +137,56 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 | Authentication | POST | `/auth/refresh` | Public with refresh token |
 | Authentication | POST | `/auth/logout` | Authenticated |
 | Authentication | GET | `/auth/me` | Authenticated |
-| Brands | GET | `/brands` | PSA |
-| Brands | POST | `/brands` | PSA |
-| Brands | GET | `/brands/{brandId}` | PSA / scoped user |
-| Brands | PATCH | `/brands/{brandId}` | PSA |
+| Tenants | GET | `/tenants` | PLATFORM_SUPER_ADMIN |
+| Tenants | POST | `/tenants` | PLATFORM_SUPER_ADMIN |
+| Tenants | GET | `/tenants/{tenantId}` | PLATFORM_SUPER_ADMIN / scoped user |
+| Tenants | PATCH | `/tenants/{tenantId}` | PLATFORM_SUPER_ADMIN |
 | Products | GET | `/products` | Public / scoped |
-| Products | POST | `/products` | PSA / BA |
+| Products | POST | `/products` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN |
 | Products | GET | `/products/{productId}` | Public / scoped |
-| Products | PATCH | `/products/{productId}` | PSA / BA |
-| Products | DELETE | `/products/{productId}` | PSA / BA |
-| Machines | GET | `/machines` | PSA / BA / OM / TECH |
-| Machines | POST | `/machines` | PSA / BA / OM |
+| Products | PATCH | `/products/{productId}` (update fields or set `status=INACTIVE`) | PLATFORM_SUPER_ADMIN / BRAND_ADMIN |
+| Machines | GET | `/machines` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER / TECHNICIAN |
+| Machines | POST | `/machines` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER |
 | Machines | GET | `/machines/{machineId}` | Scoped |
-| Machines | PATCH | `/machines/{machineId}` | PSA / BA / OM |
+| Machines | PATCH | `/machines/{machineId}` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER |
 | Machines | GET | `/machines/{machineId}/slots` | Scoped |
-| Slots | PATCH | `/machines/{machineId}/slots/{slotId}` | BA / OM / INV / TECH |
+| Slots | PATCH | `/machines/{machineId}/slots/{slotId}` | BRAND_ADMIN / OPERATIONS_MANAGER / INVENTORY_STAFF / TECHNICIAN |
 | Customer Catalog | GET | `/kiosks/{machineId}/products` | Public |
-| Orders | POST | `/orders` | CUST |
-| Orders | GET | `/orders/{orderId}` | CUST / scoped staff |
-| Payments | POST | `/payments/callback` | PAY / simulator |
-| Payments | GET | `/orders/{orderId}/payment` | CUST / scoped staff |
-| Dispensing | GET | `/orders/{orderId}/dispensing` | CUST / scoped staff |
-| Dispensing | POST | `/orders/{orderId}/dispensing` | Backend/internal workflow |
-| Device | POST | `/devices/heartbeat` | DEV |
-| Device | POST | `/devices/events` | DEV |
-| Inventory | GET | `/inventory` | BA / INV |
-| Inventory | POST | `/inventory/refills` | INV |
-| Inventory | POST | `/inventory/adjustments` | INV / authorized BA |
-| Alerts | GET | `/alerts` | OM / TECH / INV |
-| Alerts | PATCH | `/alerts/{alertId}` | OM / TECH / INV |
-| Maintenance | GET | `/maintenance` | OM / TECH |
-| Maintenance | POST | `/maintenance` | OM |
-| Maintenance | GET | `/maintenance/{maintenanceId}` | OM / TECH |
-| Maintenance | PATCH | `/maintenance/{maintenanceId}` | OM / TECH |
-| Reports | GET | `/dashboard/summary` | PSA / BA / OM |
-| Audit | GET | `/audit-logs` | PSA / authorized staff |
+| Orders | POST | `/orders` | PUBLIC_KIOSK |
+| Orders | GET | `/orders/{orderId}` | PUBLIC_KIOSK / scoped staff |
+| Payments | POST | `/payments/callback` | PAYMENT_PROVIDER / simulator |
+| Payments | POST | `/orders/{orderId}/payment-sessions` | PUBLIC_KIOSK bound to order session |
+| Payments | GET | `/orders/{orderId}/payments` | PUBLIC_KIOSK bound to order session / scoped staff |
+| Dispensing | GET | `/orders/{orderId}/dispensing` | PUBLIC_KIOSK / scoped staff |
+| Dispensing | Internal workflow | Create command only after verified payment and safety re-check | Backend service only; not a public endpoint |
+| Device | POST | `/devices/heartbeat` | KIOSK_DEVICE |
+| Device | POST | `/devices/events` | KIOSK_DEVICE |
+| Inventory | GET | `/inventory` | BRAND_ADMIN / INVENTORY_STAFF |
+| Inventory | POST | `/inventory/refills` | INVENTORY_STAFF |
+| Inventory | POST | `/inventory/adjustments` | INVENTORY_STAFF / authorized BRAND_ADMIN |
+| Alerts | GET | `/alerts` | OPERATIONS_MANAGER / TECHNICIAN / INVENTORY_STAFF |
+| Alerts | PATCH | `/alerts/{alertId}` | OPERATIONS_MANAGER / TECHNICIAN / INVENTORY_STAFF |
+| Maintenance | GET | `/maintenance` | OPERATIONS_MANAGER / TECHNICIAN |
+| Maintenance | POST | `/maintenance` | OPERATIONS_MANAGER |
+| Maintenance | GET | `/maintenance/{maintenanceId}` | OPERATIONS_MANAGER / TECHNICIAN |
+| Maintenance | PATCH | `/maintenance/{maintenanceId}` | OPERATIONS_MANAGER / TECHNICIAN |
+| Reports | GET | `/dashboard/summary` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER |
+| Users | GET | `/users` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN with tenant scope |
+| Users | POST | `/users` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN with tenant scope |
+| Users | PATCH | `/users/{userId}` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN with tenant scope |
+| Roles | GET | `/roles` | Authenticated administrative user |
+| Locations | GET/POST | `/locations` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN |
+| Locations | PATCH | `/locations/{locationId}` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN |
+| Orders | GET | `/orders` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER |
+| Orders | POST | `/orders/{orderId}/cancel` | Order session / authorized staff |
+| Inventory | GET | `/inventory/transactions` | BRAND_ADMIN / INVENTORY_STAFF |
+| Inventory | POST | `/machines/{machineId}/diagnostic-sprays` | TECHNICIAN / authorized OPERATIONS_MANAGER |
+| Telemetry | GET | `/machines/{machineId}/sensor-readings` | Scoped authorized staff |
+| Notifications | GET | `/notifications` | Authenticated user |
+| Notifications | PATCH | `/notifications/{notificationId}` | Notification owner |
+| Audit | GET | `/audit-logs` | PLATFORM_SUPER_ADMIN / authorized staff |
 
-> `POST /orders/{orderId}/dispensing` is an internal/backend workflow endpoint and should not be exposed as a normal customer action. The customer cannot directly request a successful spray.
+> Dispensing command creation is an internal backend workflow, not a public customer endpoint. The backend may create a command only after verified payment and a fresh machine/slot safety check. The customer cannot directly request a successful spray.
 
 ---
 
@@ -216,8 +228,8 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
     "user": {
       "id": "usr_001",
       "email": "admin@scentstation.local",
-      "roles": ["PSA"],
-      "brandIds": []
+      "roles": ["PLATFORM_SUPER_ADMIN"],
+      "tenantIds": []
     }
   },
   "message": "Login successful"
@@ -305,21 +317,21 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
   "data": {
     "id": "usr_001",
     "email": "admin@scentstation.local",
-    "roles": ["PSA"],
-    "brandIds": []
+    "roles": ["PLATFORM_SUPER_ADMIN"],
+    "tenantIds": []
   }
 }
 ```
 
 ---
 
-# 5. Brand Management
+# 5. Tenant Management
 
-## 5.1 List Brands
+## 5.1 List Tenants
 
-### `GET /api/v1/brands`
+### `GET /api/v1/tenants`
 
-**Access:** `PSA`
+**Access:** `PLATFORM_SUPER_ADMIN`
 
 ### Query parameters
 
@@ -335,8 +347,8 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
   "data": {
     "items": [
       {
-        "id": "brand_001",
-        "name": "Scent Brand",
+        "id": "tenant_001",
+        "name": "Scent Tenant",
         "description": "Example brand",
         "status": "ACTIVE"
       }
@@ -356,18 +368,18 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 
 ---
 
-## 5.2 Create Brand
+## 5.2 Create Tenant
 
-### `POST /api/v1/brands`
+### `POST /api/v1/tenants`
 
-**Access:** `PSA`
+**Access:** `PLATFORM_SUPER_ADMIN`
 
 ### Request
 
 ```json
 {
-  "name": "Scent Brand",
-  "description": "Example perfume brand",
+  "name": "Scent Tenant",
+  "description": "Example tenant",
   "status": "ACTIVE"
 }
 ```
@@ -384,9 +396,9 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 {
   "success": true,
   "data": {
-    "id": "brand_001",
-    "name": "Scent Brand",
-    "description": "Example perfume brand",
+    "id": "tenant_001",
+    "name": "Scent Tenant",
+    "description": "Example tenant",
     "status": "ACTIVE"
   },
   "message": "Brand created successfully"
@@ -396,16 +408,16 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 ### Errors
 
 - `400 VALIDATION_ERROR`
-- `409 BRAND_ALREADY_EXISTS`
+- `409 TENANT_ALREADY_EXISTS`
 - `403 FORBIDDEN`
 
 ---
 
-## 5.3 Get Brand
+## 5.3 Get Tenant
 
-### `GET /api/v1/brands/{brandId}`
+### `GET /api/v1/tenants/{tenantId}`
 
-**Access:** `PSA`; scoped users may access only assigned brands.
+**Access:** `PLATFORM_SUPER_ADMIN`; scoped users may access only assigned tenants.
 
 ### Response `200 OK`
 
@@ -413,9 +425,9 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 {
   "success": true,
   "data": {
-    "id": "brand_001",
-    "name": "Scent Brand",
-    "description": "Example perfume brand",
+    "id": "tenant_001",
+    "name": "Scent Tenant",
+    "description": "Example tenant",
     "status": "ACTIVE"
   }
 }
@@ -425,15 +437,15 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 
 - `401 UNAUTHORIZED`
 - `403 TENANT_ACCESS_DENIED`
-- `404 BRAND_NOT_FOUND`
+- `404 TENANT_NOT_FOUND`
 
 ---
 
-## 5.4 Update Brand
+## 5.4 Update Tenant
 
-### `PATCH /api/v1/brands/{brandId}`
+### `PATCH /api/v1/tenants/{tenantId}`
 
-**Access:** `PSA`
+**Access:** `PLATFORM_SUPER_ADMIN`
 
 ### Request
 
@@ -453,8 +465,8 @@ Returns the updated brand.
 
 - `400 VALIDATION_ERROR`
 - `403 FORBIDDEN`
-- `404 BRAND_NOT_FOUND`
-- `409 BRAND_ALREADY_EXISTS`
+- `404 TENANT_NOT_FOUND`
+- `409 TENANT_ALREADY_EXISTS`
 
 ---
 
@@ -469,7 +481,7 @@ Returns the updated brand.
 ### Query parameters
 
 ```text
-?brandId=brand_001&status=ACTIVE&page=0&size=20
+?tenantId=tenant_001&status=ACTIVE&page=0&size=20
 ```
 
 For the customer catalog, only products that are active and currently available through a valid machine/slot should be returned.
@@ -483,10 +495,11 @@ For the customer catalog, only products that are active and currently available 
     "items": [
       {
         "id": "prod_001",
-        "brandId": "brand_001",
+        "tenantId": "tenant_001",
         "name": "Ocean Mist",
         "description": "Fresh aquatic fragrance",
-        "pricePerSpray": 15000,
+        "price": "15000.00",
+        "volumePerSprayMl": "0.10",
         "currency": "VND",
         "status": "ACTIVE"
       }
@@ -505,18 +518,18 @@ For the customer catalog, only products that are active and currently available 
 
 ### `POST /api/v1/products`
 
-**Access:** `PSA`, `BA`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`
 
 ### Request
 
 ```json
 {
-  "brandId": "brand_001",
+  "tenantId": "tenant_001",
   "name": "Ocean Mist",
   "description": "Fresh aquatic fragrance",
   "imageUrl": "https://example.local/ocean-mist.jpg",
   "scentNotes": ["Citrus", "Marine", "Woody"],
-  "pricePerSpray": 15000,
+  "price": "15000.00",
   "currency": "VND",
   "status": "ACTIVE"
 }
@@ -524,9 +537,9 @@ For the customer catalog, only products that are active and currently available 
 
 ### Validation
 
-- `brandId`: required and inside caller scope.
+- `tenantId`: required and inside caller scope.
 - `name`: required, non-blank.
-- `pricePerSpray`: positive.
+- `price`: positive.
 - `currency`: supported currency.
 - `status`: `ACTIVE` or `INACTIVE`.
 
@@ -538,7 +551,7 @@ Returns the created product.
 
 - `400 VALIDATION_ERROR`
 - `403 TENANT_ACCESS_DENIED`
-- `404 BRAND_NOT_FOUND`
+- `404 TENANT_NOT_FOUND`
 - `409 PRODUCT_ALREADY_EXISTS`
 
 ---
@@ -560,7 +573,7 @@ Returns the created product.
 
 ### `PATCH /api/v1/products/{productId}`
 
-**Access:** `PSA`, `BA`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`
 
 ### Validation
 
@@ -574,19 +587,27 @@ Same validation rules as create. A product outside the caller's tenant scope mus
 
 ## 6.5 Deactivate Product
 
-### `DELETE /api/v1/products/{productId}`
+### `PATCH /api/v1/products/{productId}`
 
-**Access:** `PSA`, `BA`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`
 
-**Behavior:** Logical deactivation is preferred over physical deletion when the product is referenced by orders/history.
+**Request**
 
-### Response `204 No Content`
+```json
+{
+  "status": "INACTIVE"
+}
+```
+
+**Behavior:** This endpoint deactivates the product logically. It does not physically delete records referenced by orders or history.
+
+### Response `200 OK` with the updated product.
 
 ### Errors
 
 - `403 TENANT_ACCESS_DENIED`
 - `404 PRODUCT_NOT_FOUND`
-- `409 PRODUCT_IN_USE`
+- `409 PRODUCT_IN_USE` only if an explicit business rule prevents deactivation; otherwise this error is not applicable.
 
 ---
 
@@ -596,12 +617,12 @@ Same validation rules as create. A product outside the caller's tenant scope mus
 
 ### `GET /api/v1/machines`
 
-**Access:** `PSA`, `BA`, `OM`, `TECH`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `TECHNICIAN`
 
 ### Query
 
 ```text
-?brandId=brand_001&status=ONLINE&page=0&size=20
+?tenantId=tenant_001&status=ONLINE&page=0&size=20
 ```
 
 ### Response
@@ -614,9 +635,10 @@ Same validation rules as create. A product outside the caller's tenant scope mus
       {
         "id": "machine_001",
         "code": "KIOSK-001",
-        "brandId": "brand_001",
+        "brandId": "tenant_001",
         "location": "Store A",
         "status": "ONLINE",
+        "operationalStatus": "ACTIVE",
         "lastSeenAt": "2026-10-15T12:59:30Z"
       }
     ],
@@ -634,14 +656,14 @@ Same validation rules as create. A product outside the caller's tenant scope mus
 
 ### `POST /api/v1/machines`
 
-**Access:** `PSA`, `BA`, `OM`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`
 
 ### Request
 
 ```json
 {
   "code": "KIOSK-001",
-  "brandId": "brand_001",
+  "brandId": "tenant_001",
   "location": "Store A",
   "status": "ACTIVE"
 }
@@ -650,7 +672,7 @@ Same validation rules as create. A product outside the caller's tenant scope mus
 ### Validation
 
 - `code`: required and unique.
-- `brandId`: required and authorized.
+- `tenantId`: required and authorized.
 - `location`: required according to deployment policy.
 - Machine must not be registered to an unauthorized tenant.
 
@@ -662,7 +684,7 @@ Returns machine data.
 
 - `400 VALIDATION_ERROR`
 - `403 TENANT_ACCESS_DENIED`
-- `404 BRAND_NOT_FOUND`
+- `404 TENANT_NOT_FOUND`
 - `409 MACHINE_CODE_ALREADY_EXISTS`
 
 ---
@@ -681,7 +703,7 @@ Returns machine status, `lastSeenAt`, and high-level operational state.
 
 ### `PATCH /api/v1/machines/{machineId}`
 
-**Access:** `PSA`, `BA`, `OM`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`
 
 ### Request
 
@@ -704,7 +726,7 @@ Returns machine status, `lastSeenAt`, and high-level operational state.
 
 ### `GET /api/v1/machines/{machineId}/slots`
 
-**Access:** `PSA`, `BA`, `OM`, `TECH`, `INV`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `TECHNICIAN`, `INVENTORY_STAFF`
 
 ### Response
 
@@ -718,9 +740,10 @@ Returns machine status, `lastSeenAt`, and high-level operational state.
         "id": "slot_001",
         "slotCode": "SLOT-01",
         "productId": "prod_001",
-        "cartridgeId": "cart_001",
-        "status": "READY",
-        "estimatedRemaining": 85
+        "capacityMl": "100.00",
+        "currentVolumeMl": "85.00",
+        "lowStockThresholdMl": "20.00",
+        "status": "AVAILABLE"
       }
     ]
   }
@@ -733,16 +756,17 @@ Returns machine status, `lastSeenAt`, and high-level operational state.
 
 ### `PATCH /api/v1/machines/{machineId}/slots/{slotId}`
 
-**Access:** `BA`, `OM`, `INV`, `TECH`
+**Access:** `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `INVENTORY_STAFF`, `TECHNICIAN`
 
 ### Request
 
 ```json
 {
   "productId": "prod_001",
-  "cartridgeId": "cart_001",
-  "status": "READY",
-  "lowStockThreshold": 20
+  "capacityMl": "100.00",
+  "currentVolumeMl": "85.00",
+  "lowStockThresholdMl": "20.00",
+  "status": "AVAILABLE"
 }
 ```
 
@@ -750,8 +774,7 @@ Returns machine status, `lastSeenAt`, and high-level operational state.
 
 - `slotId` must belong to `machineId`.
 - Product must exist and belong to the same tenant.
-- Cartridge must be valid for the selected product.
-- A slot can have only one active cartridge at a time.
+- The selected product must belong to the same tenant as the machine.
 - A slot must not be marked ready if the machine is under maintenance or has a critical fault.
 
 ### Errors
@@ -781,8 +804,7 @@ The backend must verify:
 - Machine exists.
 - Machine is online.
 - Machine is operational.
-- Slot is active/ready.
-- Cartridge exists and has sufficient estimated inventory.
+- Slot has sufficient `currentVolumeMl` for the configured spray volume.
 - Product is active.
 
 ### Response `200 OK`
@@ -797,7 +819,7 @@ The backend must verify:
         "productId": "prod_001",
         "slotId": "slot_001",
         "name": "Ocean Mist",
-        "pricePerSpray": 15000,
+        "price": "15000.00",
         "currency": "VND",
         "available": true
       }
@@ -820,7 +842,7 @@ The backend must verify:
 
 ### `POST /api/v1/orders`
 
-**Access:** `CUST`
+**Access:** `PUBLIC_KIOSK`
 
 ### Request
 
@@ -843,7 +865,7 @@ The backend must verify:
 - Inventory must be sufficient.
 - Server determines the payable amount; client-provided price is not trusted.
 - Server stores product/price snapshot.
-- A new order is initially `PENDING_PAYMENT`.
+-  A new order is initially `PENDING_PAYMENT`. Payment QR/session data is created only by `POST /api/v1/orders/{orderId}/payment-sessions`; this endpoint does not create a payment session.
 - The order is bound to exactly one machine and slot.
 
 ### Response `201 Created`
@@ -852,19 +874,16 @@ The backend must verify:
 {
   "success": true,
   "data": {
-    "orderId": "order_001",
-    "machineId": "machine_001",
+    "orderId": "ord_001",
+    "machineId": "mach_001",
     "slotId": "slot_001",
     "productId": "prod_001",
-    "productName": "Ocean Mist",
-    "amount": 15000,
+    "productNameSnapshot": "Ocean Mist",
+    "unitPrice": "15000.00",
     "currency": "VND",
     "status": "PENDING_PAYMENT",
     "expiresAt": "2026-10-15T13:10:00Z",
-    "payment": {
-      "method": "QR",
-      "qrPayload": "<payment-payload>"
-    }
+    "createdAt": "2026-10-15T13:00:00Z"
   },
   "message": "Order created successfully"
 }
@@ -898,7 +917,7 @@ The backend must verify:
   "data": {
     "orderId": "order_001",
     "status": "PAID",
-    "amount": 15000,
+    "amount": "15000.00",
     "currency": "VND",
     "machineId": "machine_001",
     "slotId": "slot_001",
@@ -922,7 +941,7 @@ The backend must verify:
 
 ### `POST /api/v1/payments/callback`
 
-**Access:** `PAY` / payment simulator
+**Access:** `PAYMENT_PROVIDER` / payment simulator
 
 > This endpoint is not a customer endpoint.
 
@@ -932,7 +951,7 @@ The backend must verify:
 {
   "providerReference": "PAY-20261015-0001",
   "orderId": "order_001",
-  "amount": 15000,
+  "amount": "15000.00",
   "currency": "VND",
   "status": "SUCCESS",
   "paidAt": "2026-10-15T13:05:20Z",
@@ -991,7 +1010,7 @@ The backend must verify:
     "paymentId": "pay_001",
     "orderId": "order_001",
     "providerReference": "PAY-20261015-0001",
-    "amount": 15000,
+    "amount": "15000.00",
     "currency": "VND",
     "status": "SUCCESS"
   }
@@ -1057,7 +1076,7 @@ The backend must verify:
 - `409 DISPENSING_ALREADY_SUCCESSFUL`
 - `409 MACHINE_OFFLINE`
 - `409 MACHINE_UNAVAILABLE`
-- `409 SLOT_NOT_READY`
+- `409 SLOT_NOT_AVAILABLE`
 - `409 DUPLICATE_COMMAND`
 
 ---
@@ -1076,7 +1095,8 @@ The backend must verify:
   "data": {
     "orderId": "order_001",
     "commandId": "cmd_001",
-    "status": "SUCCESS",
+    "status": "DISPENSED",
+    "executionStatus": "SUCCESS",
     "result": "SPRAY_COMPLETED",
     "completedAt": "2026-10-15T13:05:45Z"
   }
@@ -1088,16 +1108,15 @@ Possible dispensing statuses:
 ```text
 PENDING
 SENT
-ACKNOWLEDGED
 SUCCESS
 FAILED
-REVIEW_REQUIRED
+UNCERTAIN
 EXPIRED
 ```
 
 ### Important rule
 
-A timeout or missing response does **not** prove that spraying did not occur. The system must move to `REVIEW_REQUIRED` when the result is uncertain and must not automatically issue a second spray command.
+A timeout or missing response does **not** prove that spraying did not occur. The order must move to `REVIEW` and the execution status to `UNCERTAIN` when the result is uncertain and must not automatically issue a second spray command.
 
 ---
 
@@ -1107,7 +1126,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `POST /api/v1/devices/heartbeat`
 
-**Access:** `DEV`
+**Access:** `KIOSK_DEVICE`
 
 ### Request
 
@@ -1151,7 +1170,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `POST /api/v1/devices/events`
 
-**Access:** `DEV`
+**Access:** `KIOSK_DEVICE`
 
 ### Request
 
@@ -1204,7 +1223,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `GET /api/v1/inventory`
 
-**Access:** `BA`, `INV`
+**Access:** `BRAND_ADMIN`, `INVENTORY_STAFF`
 
 ### Query
 
@@ -1222,10 +1241,11 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
       {
         "machineId": "machine_001",
         "slotId": "slot_001",
-        "cartridgeId": "cart_001",
-        "estimatedRemaining": 18,
-        "lowStockThreshold": 20,
-        "status": "LOW"
+        "productId": "prod_001",
+        "capacityMl": "100.00",
+        "currentVolumeMl": "18.00",
+        "lowStockThresholdMl": "20.00",
+        "status": "LOW_STOCK"
       }
     ]
   }
@@ -1238,7 +1258,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `POST /api/v1/inventory/refills`
 
-**Access:** `INV`
+**Access:** `INVENTORY_STAFF`
 
 ### Request
 
@@ -1246,19 +1266,16 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 {
   "machineId": "machine_001",
   "slotId": "slot_001",
-  "cartridgeId": "cart_001",
-  "operation": "REFILL",
-  "quantityAdded": 100,
-  "note": "Refilled cartridge"
+  "quantityAddedMl": "100.00",
+  "note": "Refilled slot after product replenishment"
 }
 ```
 
 ### Validation
 
-- Machine and slot must exist.
-- Slot must belong to machine.
-- Cartridge must be valid.
-- `quantityAdded` must be positive.
+- Machine and slot must exist, and the slot must belong to the specified machine.
+- `quantityAddedMl` must be positive.
+- `currentVolumeMl + quantityAddedMl` must not exceed `capacityMl`; otherwise reject the refill or require an explicitly authorized adjustment workflow.
 - Required fields cannot be null.
 - User must have inventory permission.
 - The operation must be recorded with actor and timestamp.
@@ -1272,8 +1289,9 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
     "refillId": "refill_001",
     "machineId": "machine_001",
     "slotId": "slot_001",
-    "quantityAdded": 100,
-    "estimatedRemaining": 118
+    "quantityAddedMl": "100.00",
+    "currentVolumeMl": "118.00",
+    "status": "AVAILABLE"
   },
   "message": "Refill recorded successfully"
 }
@@ -1284,7 +1302,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 - `400 VALIDATION_ERROR`
 - `403 FORBIDDEN`
 - `404 SLOT_NOT_FOUND`
-- `409 INVALID_CARTRIDGE`
+- `409 INVALID_SLOT_CONFIGURATION`
 
 ---
 
@@ -1292,7 +1310,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `POST /api/v1/inventory/adjustments`
 
-**Access:** `INV`, authorized `BA`
+**Access:** `INVENTORY_STAFF`, authorized `BRAND_ADMIN`
 
 ### Request
 
@@ -1330,7 +1348,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `GET /api/v1/alerts`
 
-**Access:** `OM`, `TECH`, `INV`
+**Access:** `OPERATIONS_MANAGER`, `TECHNICIAN`, `INVENTORY_STAFF`
 
 ### Query
 
@@ -1366,7 +1384,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `PATCH /api/v1/alerts/{alertId}`
 
-**Access:** `OM`, `TECH`, `INV`
+**Access:**  `OPERATIONS_MANAGER`, `TECHNICIAN`, `INVENTORY_STAFF`
 
 ### Request
 
@@ -1399,7 +1417,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `GET /api/v1/maintenance`
 
-**Access:** `OM`, `TECH`
+**Access:** `OPERATIONS_MANAGER`, `TECHNICIAN`
 
 ### Query
 
@@ -1413,7 +1431,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `POST /api/v1/maintenance`
 
-**Access:** `OM`
+**Access:** `OPERATIONS_MANAGER`
 
 ### Request
 
@@ -1454,7 +1472,7 @@ A timeout or missing response does **not** prove that spraying did not occur. Th
 
 ### `GET /api/v1/maintenance/{maintenanceId}`
 
-**Access:** `OM`, `TECH`
+**Access:** `OPERATIONS_MANAGER`, `TECHNICIAN`
 
 Returns ticket details and maintenance history.
 
@@ -1464,7 +1482,7 @@ Returns ticket details and maintenance history.
 
 ### `PATCH /api/v1/maintenance/{maintenanceId}`
 
-**Access:** `OM`, `TECH`
+**Access:** `OPERATIONS_MANAGER`, `TECHNICIAN`
 
 ### Request
 
@@ -1499,12 +1517,12 @@ Returns ticket details and maintenance history.
 
 ### `GET /api/v1/dashboard/summary`
 
-**Access:** `PSA`, `BA`, `OM`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`
 
 ### Query
 
 ```text
-?brandId=brand_001&from=2026-10-01&to=2026-10-15
+?tenantId=tenant_001&from=2026-10-01&to=2026-10-15
 ```
 
 ### Response `200 OK`
@@ -1550,7 +1568,7 @@ Tenant scope must be applied before calculating statistics.
 
 ### `GET /api/v1/audit-logs`
 
-**Access:** `PSA`; additional access only if explicitly granted by the RBAC policy.
+**Access:** `PLATFORM_SUPER_ADMIN`; additional access only if explicitly granted by the RBAC policy.
 
 ### Query
 
@@ -1694,10 +1712,11 @@ Recommended states:
 PENDING_PAYMENT
 PAID
 DISPENSING
-SUCCESS
+DISPENSED
 FAILED
 EXPIRED
-REVIEW_REQUIRED
+REFUNDED
+REVIEW
 ```
 
 ## 20.2 Payment
@@ -1717,7 +1736,7 @@ SENT
 ACKNOWLEDGED
 SUCCESS
 FAILED
-REVIEW_REQUIRED
+REVIEW
 EXPIRED
 ```
 
@@ -1737,7 +1756,8 @@ ERROR
 Recommended minimum states:
 
 ```text
-READY
+AVAILABLE
+LOW_STOCK
 EMPTY
 DISABLED
 ERROR
@@ -1768,7 +1788,7 @@ Response:
   "success": true,
   "data": {
     "orderId": "order_001",
-    "amount": 15000,
+    "amount": "15000.00",
     "status": "PENDING_PAYMENT",
     "expiresAt": "2026-10-15T13:10:00Z"
   }
@@ -1785,7 +1805,7 @@ POST /api/v1/payments/callback
 {
   "providerReference": "PAY-001",
   "orderId": "order_001",
-  "amount": 15000,
+  "amount": "15000.00",
   "currency": "VND",
   "status": "SUCCESS",
   "signature": "<signature>"
@@ -1870,7 +1890,7 @@ The device/gateway must reject expired commands, wrong-device commands, unsafe c
 | API Area | SRS Requirement |
 |---|---|
 | `/auth/*` | SRS-AUTH-001, SRS-AUTH-002 |
-| `/brands/*` | SRS-BRAND-001 |
+| `/tenants/*` | SRS-BRAND-001 |
 | `/products/*` | SRS-PROD-001 |
 | `/machines/*` | SRS-MACH-001, SRS-MACH-002 |
 | `/kiosks/{machineId}/products` | SRS-ORDER-001 |
@@ -1894,9 +1914,9 @@ Before the API contract is marked final, TASK-005 must be reviewed against TASK-
 - [ ] Exact table/entity names.
 - [ ] Exact PK/FK names.
 - [ ] Identifier type and format.
-- [ ] `brand_id` / tenant ownership.
+- [ ] `tenant_id` ownership and tenant isolation.
 - [ ] Product-to-slot relationship.
-- [ ] Slot-to-cartridge relationship.
+- [ ] `machines` to `machine_slots` and `products` to `machine_slots` relationships; no cartridge entity is assumed.
 - [ ] Order-to-machine/slot/product relationship.
 - [ ] Order price snapshot fields.
 - [ ] Payment-to-order relationship.
@@ -1923,7 +1943,7 @@ In particular:
 5. MQTT command targets exactly one machine and slot.
 6. ACK and result are correlated using `commandId`.
 7. Duplicate callback/command/event handling is idempotent.
-8. Timeout or uncertain result becomes `REVIEW_REQUIRED`.
+8. Timeout or uncertain result becomes `REVIEW`.
 9. No automatic second spray is triggered for an uncertain result.
 10. Inventory is updated only after confirmed successful customer dispensing.
 
@@ -1953,19 +1973,305 @@ These decisions should be recorded in the relevant GitHub Issue before the API i
 # 27. Acceptance Checklist — TASK-005
 
 - [x] API prefix standardized to `/api/v1`.
-- [x] Endpoints grouped by functional module.
-- [x] HTTP method defined.
-- [x] Access control/role defined.
-- [x] Request examples provided.
-- [x] Response examples provided.
-- [x] Validation rules provided.
-- [x] Error codes and HTTP status codes provided.
-- [x] Payment-to-dispensing flow documented.
-- [x] Idempotency rules documented.
-- [x] Tenant isolation documented.
-- [x] Inventory update rule documented.
-- [x] TASK-004 synchronization points documented.
-- [x] TASK-006 synchronization points documented.
+- [ ] Endpoints grouped by functional module.
+- [ ] HTTP method defined.
+- [ ] Access control/role defined.
+- [ ] Request examples provided.
+- [ ] Response examples provided.
+- [ ] Validation rules provided.
+- [ ] Error codes and HTTP status codes provided.
+- [ ] Payment-to-dispensing flow documented.
+- [ ] Idempotency rules documented.
+- [ ] Tenant isolation documented.
+- [ ] Inventory update rule documented.
+- [ ] TASK-004 synchronization points documented.
+- [ ] TASK-006 synchronization points documented.
 - [ ] Final ERD field names reviewed and synchronized.
 - [ ] Team review completed.
 - [ ] API contract approved before backend implementation.
+
+
+---
+
+# 28. Reconciliation Notes and Additional MVP Endpoints (v0.2)
+
+This section resolves remaining contract gaps against the current TASK-004 Data Dictionary proposal. If any earlier example conflicts with this section, use this section as the proposed canonical contract until the team approves it. This document is still a draft; do not treat it as an implementation guarantee.
+
+## 28.1 Canonical entity and field mapping
+
+| API concept | TASK-004 entity/field | Canonical API field | Decision |
+|---|---|---|---|
+| Brand/account owning data | `tenants` | `tenantId` | Use tenant terminology in API and database. A tenant may represent a perfume brand/company. |
+| Product price | `products.price` | `price` | JSON decimal string, e.g. `"15000.00"`. |
+| Spray volume | `products.volume_per_spray_ml` | `volumePerSprayMl` | JSON decimal string, unit ml. |
+| Fragrance notes | `products.fragrance_notes` | `fragranceNotes` | String or array needs a team decision; DB column is TEXT, so canonical write format is a string unless a JSON conversion is explicitly agreed. |
+| Machine connection | `machines.connection_status` | `connectionStatus` | `ONLINE` or `OFFLINE`. |
+| Machine operation | `machines.operational_status` | `operationalStatus` | `ACTIVE`, `MAINTENANCE`, `DISABLED`, `ERROR`. |
+| Slot volume | `machine_slots.current_volume_ml` | `currentVolumeMl` | Decimal string in ml. |
+| Slot threshold | `machine_slots.low_stock_threshold_ml` | `lowStockThresholdMl` | Decimal string in ml. |
+| Slot state | `machine_slots.status` | `status` | `AVAILABLE`, `LOW_STOCK`, `EMPTY`, `DISABLED`, `ERROR`. |
+| Order completed successfully | `orders.status` | `DISPENSED` | Do not use `SUCCESS` as an order state. `SUCCESS` belongs to payment/execution result. |
+| Uncertain physical result | `orders.status` + `dispense_executions.execution_status` | `REVIEW` + `UNCERTAIN` | Do not automatically retry a spray. |
+| Payment attempts | `payments` (1:N order) | `payments[]` | Keep attempts/history; do not assume exactly one payment row per order. |
+| Diagnostic spray | `dispense_commands.command_type` | `DIAGNOSTIC` | No customer order required; technician authorization and audit required. |
+
+## 28.2 Idempotency and decimal conventions
+
+For `POST /orders`, `POST /orders/{orderId}/payment-sessions`, `POST /inventory/refills`, `POST /inventory/adjustments`, and internal dispense-command creation, clients/services must supply or derive an `Idempotency-Key` unique to one logical operation. Reusing the same key with the same request returns the original result; reusing it with a different payload returns `409 IDEMPOTENCY_KEY_REUSED`. This mechanism supplements but does not replace the unique command token and device-side duplicate-command protection.
+
+Money and measured volumes are decimal strings in JSON. Examples: `"price": "15000.00"`, `"amount": "15000.00"`, `"volumePerSprayMl": "0.10"`. The backend stores values using MySQL DECIMAL fields and must not use binary floating point for monetary calculations.
+
+## 28.3 List orders
+
+### `GET /api/v1/orders`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`; tenant scope is enforced server-side.
+
+**Query:** `?tenantId=tenant_001&machineId=machine_001&status=PAID&page=0&size=20&sort=createdAt,desc`
+
+**Response `200 OK`:** paginated `items`, each containing `orderId`, `orderCode`, `tenantId`, `machineId`, `slotId`, `productId`, `productNameSnapshot`, `unitPrice`, `currency`, `status`, `expiresAt`, `createdAt`, and nullable `completedAt`.
+
+**Errors:** `401 UNAUTHORIZED`, `403 TENANT_ACCESS_DENIED`, `400 VALIDATION_ERROR`.
+
+## 28.4 Create a payment session
+
+### `POST /api/v1/orders/{orderId}/payment-sessions`
+
+**Access:** authenticated kiosk/order session or `PUBLIC_KIOSK` bound to the order's machine/session. Require `Idempotency-Key`.
+
+**Purpose:** creates a payment attempt and returns the QR/payment payload. The backend must calculate amount/currency from the order, not trust the client.
+
+**Response `201 Created` example:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "paymentId": "pay_001",
+    "orderId": "ord_001",
+    "provider": "SIMULATOR",
+    "paymentRef": "PAY-20261022-0001",
+    "amount": "15000.00",
+    "currency": "VND",
+    "status": "PENDING",
+    "qrPayload": "<provider-generated-payload>",
+    "expiresAt": "2026-10-22T10:10:00Z"
+  }
+}
+```
+
+**Errors:** `401 UNAUTHORIZED`, `403 ORDER_ACCESS_DENIED`, `404 ORDER_NOT_FOUND`, `409 ORDER_NOT_PAYABLE`, `409 IDEMPOTENCY_KEY_REUSED`, `422 PAYMENT_SESSION_CREATION_FAILED`.
+
+## 28.5 List payment attempts
+
+### `GET /api/v1/orders/{orderId}/payments`
+
+**Access:** order owner/kiosk session or authorized staff in tenant scope.
+
+Returns a paginated or bounded list of payment attempts with `paymentId`, `paymentRef`, `provider`, `amount`, `currency`, `status`, `gatewayTransactionId` when safe to expose, `paidAt`, and `createdAt`. Do not expose secrets or raw signed callback credentials.
+
+**Errors:** `401 UNAUTHORIZED`, `403 ORDER_ACCESS_DENIED`, `404 ORDER_NOT_FOUND`.
+
+## 28.6 Cancel an unpaid order
+
+### `POST /api/v1/orders/{orderId}/cancel`
+
+**Access:** order owner/kiosk session or authorized staff.
+
+Allowed only before confirmed payment and before dispensing command dispatch. A paid order must follow the refund/review policy; it must not be silently cancelled.
+
+**Response:** `200 OK` with updated order status `EXPIRED` or the team's separately approved cancellation state. Because the current `orders` enum does not include `CANCELLED`, this draft proposes `EXPIRED` for an unpaid order that is intentionally closed. This is a provisional mapping and requires team approval; do not implement until approved.
+
+**Errors:** `403 ORDER_ACCESS_DENIED`, `404 ORDER_NOT_FOUND`, `409 ORDER_ALREADY_PAID`, `409 DISPENSING_ALREADY_STARTED`.
+
+## 28.7 Diagnostic spray
+
+### `POST /api/v1/machines/{machineId}/diagnostic-sprays`
+
+**Access:** `TECHNICIAN` or `OPERATIONS_MANAGER` with explicit diagnostic permission. Require `Idempotency-Key` and record an audit event.
+
+**Request:**
+
+```json
+{
+  "slotId": "slot_001",
+  "volumeMl": "0.10",
+  "reason": "Post-refill nozzle test"
+}
+```
+
+**Response `202 Accepted`:** returns `commandId`, `commandType: "DIAGNOSTIC"`, `machineId`, `slotId`, `status: "PENDING"`, and `expiresAt`.
+
+A diagnostic command has `orderId: null`, must be explicitly typed `DIAGNOSTIC`, and its inventory transaction must be recorded as `DIAGNOSTIC_SPRAY`, not `DISPENSE_SALE`. Apply the same machine/slot safety and duplicate-command controls as customer sprays.
+
+**Errors:** `401 UNAUTHORIZED`, `403 FORBIDDEN`, `404 MACHINE_NOT_FOUND`, `404 SLOT_NOT_FOUND`, `409 MACHINE_UNAVAILABLE`, `409 SLOT_NOT_AVAILABLE`, `409 IDEMPOTENCY_KEY_REUSED`.
+
+## 28.8 Get inventory transaction history
+
+### `GET /api/v1/inventory/transactions`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `INVENTORY_STAFF`; tenant scope enforced.
+
+**Query:** `?slotId=slot_001&type=REFILL&from=2026-10-01T00:00:00Z&to=2026-10-22T23:59:59Z&page=0&size=20`.
+
+**Response:** paginated transactions with `transactionId`, `slotId`, `transactionType`, `quantityMl`, `orderId` (nullable), `executionId` (nullable), `refillId` (nullable), `performedByUserId` (nullable), `createdAt`, and `note` if supported by the final dictionary.
+
+Inventory is reduced for customer sales only after confirmed successful dispensing. Diagnostic spray, refill, adjustment, removal, and disposal must remain separately identifiable in the ledger.
+
+## 28.9 Sensor readings
+
+### `GET /api/v1/machines/{machineId}/sensor-readings`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `TECHNICIAN` in scope.
+
+**Query:** `?slotId=slot_001&from=<ISO-8601>&to=<ISO-8601>&page=0&size=50`.
+
+Returns readings from `sensor_readings` with `readingId`, `machineId`, nullable `slotId`, `sensorType`, `value`, `unit`, and `recordedAt`. Exact measurement fields must match TASK-004 before implementation.
+
+**Errors:** `401 UNAUTHORIZED`, `403 TENANT_ACCESS_DENIED`, `404 MACHINE_NOT_FOUND`, `400 VALIDATION_ERROR`.
+
+## 28.10 Notifications
+
+### `GET /api/v1/notifications`
+
+**Access:** authenticated user; only that user's notifications and permitted tenant scope.
+
+**Query:** `?status=UNREAD&page=0&size=20`.
+
+Returns `notificationId`, `type`, `title`, `message`, `referenceType`, `referenceId`, `status`, and `createdAt`. Exact notification status enum must be approved with TASK-004.
+
+### `PATCH /api/v1/notifications/{notificationId}`
+
+**Access:** notification owner only.
+
+**Request:** `{"status":"READ"}`.
+
+**Errors:** `401 UNAUTHORIZED`, `403 NOTIFICATION_ACCESS_DENIED`, `404 NOTIFICATION_NOT_FOUND`, `400 VALIDATION_ERROR`.
+
+## 28.11 Tenant and location APIs
+
+Tenant management endpoints use `/api/v1/tenants` and fields matching `tenants` (`name`, `code`, `status`). Tenant creation/update is restricted to `PLATFORM_SUPER_ADMIN`.
+
+### `GET /api/v1/locations`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`; scope enforced.
+
+**Query:** `?tenantId=tenant_001&status=ACTIVE&page=0&size=20`.
+
+Returns `locationId`, `tenantId`, `name`, `address`, `description`, `status`, `createdAt`, and `updatedAt`.
+
+### `POST /api/v1/locations`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN` within tenant scope.
+
+**Request:** `{"tenantId":"tenant_001","name":"Store A","address":"Example address","description":"Optional"}`.
+
+**Response:** `201 Created` with the new location. Validate that caller can manage `tenantId`, `name` and `address` are non-blank, and status defaults to `ACTIVE`.
+
+### `PATCH /api/v1/locations/{locationId}`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER` within scope. Partial update of `name`, `address`, `description`, and/or `status`.
+
+**Errors:** `401 UNAUTHORIZED`, `403 TENANT_ACCESS_DENIED`, `404 LOCATION_NOT_FOUND`, `400 VALIDATION_ERROR`.
+
+## 28.12 User and role management
+
+### `GET /api/v1/users`
+
+**Access:** `PLATFORM_SUPER_ADMIN`; tenant administrators may list users only if the team authorizes this capability.
+
+**Query:** `?tenantId=tenant_001&status=ACTIVE&page=0&size=20`.
+
+Returns user profile fields only: `userId`, `tenantId` (nullable for platform-level users), `username`, `email`, `fullName`, `status`, `roles`, `createdAt`, `updatedAt`. Never return `passwordHash`.
+
+### `POST /api/v1/users`
+
+**Access:** `PLATFORM_SUPER_ADMIN` (tenant-scoped user provisioning may be delegated by explicit policy).
+
+**Request:** `{"tenantId":"tenant_001","username":"ops01","email":"ops@example.local","fullName":"Operations User","temporaryPassword":"<one-time-secret>","roleCodes":["OPERATIONS_MANAGER"]}`.
+
+Validate email/username uniqueness, role codes against `roles.code`, tenant scope, and password policy. Store only a secure password hash; never log the temporary password.
+
+### `PATCH /api/v1/users/{userId}`
+
+**Access:** `PLATFORM_SUPER_ADMIN`; authorized tenant admin only if policy allows.
+
+May update `fullName`, `email`, `status`, and role assignments. Role changes must be audited. Never accept a client-supplied password hash.
+
+### `GET /api/v1/roles`
+
+**Access:** `PLATFORM_SUPER_ADMIN` or authenticated users when needed to populate permitted role choices. Returns role `code`, `name`, and `description` from `roles`.
+
+**Note:** `KIOSK_DEVICE`, `PAYMENT_PROVIDER`, and `PUBLIC_KIOSK` describe integration/session principals in this API draft, not rows in `roles` unless TASK-004 is changed to include them. The current `roles` table contains the five human/platform role codes listed in Section 2.
+
+## 28.13 Device command acknowledgement and event processing
+
+MQTT is the primary device channel per TASK-002. REST device event endpoints are testing/fallback interfaces only unless the team explicitly decides otherwise. The backend consumes device events and updates `dispense_executions` idempotently.
+
+A dispensing result event must include `eventId`, `eventType`, `commandId`, `machineId`, `slotId`, `result`, `recordedAt`, and optional `errorCode`/telemetry. The backend verifies the command belongs to that machine and slot, rejects duplicate or misdirected events, and does not accept a device-originated event as proof of payment. `SUCCESS` is accepted only from the authenticated device channel after actual hardware confirmation.
+
+## 28.14 Order/payment/dispensing state mapping
+
+| Event | `orders.status` | `payments.status` | `dispense_commands.status` / execution |
+|---|---|---|---|
+| Order created | `PENDING_PAYMENT` | `PENDING` after payment attempt created | No command |
+| Verified payment success | `PAID` | `SUCCESS` | Command created after safety re-check |
+| Command dispatched | `DISPENSING` | `SUCCESS` | `SENT` |
+| Spray confirmed | `DISPENSED` | `SUCCESS` | Execution `SUCCESS` |
+| Device confirms failure | `FAILED` or approved recovery state | `SUCCESS` pending refund/review policy | Execution `FAILED` |
+| Result uncertain/timeout | `REVIEW` | `SUCCESS` | Execution `UNCERTAIN`; never auto-retry |
+| Unpaid order expires | `EXPIRED` | `EXPIRED` if attempt exists | No command |
+| Refund confirmed | `REFUNDED` | `REFUNDED` | Existing execution retained for audit |
+
+Payment success does not automatically imply spray success. If dispensing fails or is uncertain, refund/compensation policy must be defined by the team and reflected in TASK-006.
+
+## 28.15 Corrected endpoint inventory
+
+The following endpoint groups are included in this contract proposal. A module does not need CRUD for every database table; endpoints should exist only where required by MVP use cases.
+
+| Area | Required routes |
+|---|---|
+| Authentication | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me` |
+| Tenants | `GET/POST /tenants`, `GET/PATCH /tenants/{tenantId}` |
+| Users/roles | `GET/POST /users`, `PATCH /users/{userId}`, `GET /roles` |
+| Locations | `GET/POST /locations`, `PATCH /locations/{locationId}` |
+| Products | `GET/POST /products`, `GET/PATCH /products/{productId}`, deactivate via `PATCH status=INACTIVE` preferred |
+| Machines/slots | `GET/POST /machines`, `GET/PATCH /machines/{machineId}`, `GET/PATCH /machines/{machineId}/slots/{slotId}` |
+| Kiosk/order | `GET /kiosks/{machineId}/products`, `POST /orders`, `GET /orders`, `GET /orders/{orderId}`, `POST /orders/{orderId}/cancel` |
+| Payments | `POST /orders/{orderId}/payment-sessions`, provider callback, `GET /orders/{orderId}/payments` |
+| Dispensing | Internal customer command flow, `GET /orders/{orderId}/dispensing`, diagnostic spray, authenticated MQTT result events |
+| IoT | MQTT heartbeat/status/event primary; REST heartbeat/event only fallback/testing |
+| Inventory | `GET /inventory`, `POST /inventory/refills`, `POST /inventory/adjustments`, `GET /inventory/transactions` |
+| Alerts/maintenance | Existing alert and maintenance routes; maintenance logs should be recorded as part of ticket workflow |
+| Telemetry | `GET /machines/{machineId}/sensor-readings` |
+| Reporting/audit | `GET /dashboard/summary`, `GET /audit-logs` |
+| Notifications | `GET /notifications`, `PATCH /notifications/{notificationId}` |
+
+## 28.16 Team decisions still required
+
+- [ ] Approve whether “brand” is exactly represented by `tenants` in the current model.
+- [ ] Confirm `fragranceNotes` API type: plain string to match DB TEXT, or an explicit structured JSON model.
+- [ ] Confirm whether `orders.status` includes `CANCELLED`; current dictionary proposal does not, so this draft maps unpaid user cancellation to `EXPIRED` pending approval.
+- [ ] Confirm refund and failed-dispense compensation policy.
+- [ ] Confirm payment provider/simulator, callback signature and payment-session protocol.
+- [ ] Confirm exact `sensor_readings` fields and notification status enum against TASK-004.
+- [ ] Confirm tenant-scoped user administration permissions.
+- [ ] Confirm whether IDs are numeric strings in API responses and whether examples should use `ord_001`-style labels only as illustrative aliases.
+- [ ] Review all endpoint access rules with TASK-003 Use Case and TASK-006 Sequence diagrams.
+- [ ] Approve final contract before backend implementation.
+
+## 28.17 Revised acceptance checklist
+
+- [x] API prefix `/api/v1` and JSON conventions documented.
+- [x] Canonical role codes listed for human roles.
+- [x] Tenant terminology normalized to `tenants`; team confirmation still required.
+- [x] Product price/volume/fragrance field mapping documented.
+- [x] Machine connection and operational states separated.
+- [x] Inventory examples use `machine_slots` fields; verify against the approved TASK-004 schema.
+- [x] Order, payment and execution states separated.
+- [x] Idempotency, payment verification and no-auto-retry safety rules documented.
+- [x] Missing MVP endpoint proposals added.
+- [ ] All endpoint examples and status enums verified end-to-end against TASK-004 and TASK-006.
+- [ ] TASK-004 ERD/Data Dictionary approved and frozen.
+- [ ] TASK-003/TASK-006 consistency review completed.
+- [ ] Team approval recorded on GitHub Issue/PR.
