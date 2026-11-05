@@ -55,6 +55,38 @@ flowchart TB
 
 Ranh giới triển khai vật lý giữa backend, broker, gateway và thiết bị sẽ được thống nhất trong thiết kế chi tiết. Sơ đồ hiện tại mô tả kiến trúc logic mức cao.
 
+**Công nghệ và môi trường phát triển**
+
+Nhóm thống nhất sử dụng các công nghệ sau cho phiên bản triển khai ScentStation:
+
+| Tầng | Công nghệ | Phiên bản / Ghi chú |
+|---|---|---|
+| Frontend | React + TypeScript | Giao diện Kiosk và Admin Portal |
+| Backend | Java Spring Boot | 4.1.2 |
+| Java | JDK | 21 |
+| Build Tool | Apache Maven | Maven Wrapper 3.10.0 |
+| Packaging | Jar | Spring Boot executable JAR |
+| Web Framework | Spring MVC | REST API |
+| Validation | Jakarta Bean Validation | Kiểm tra dữ liệu đầu vào |
+| ORM | Spring Data JPA | Dự kiến sử dụng |
+| Database | MySQL | Phiên bản máy chủ cần được nhóm thống nhất |
+| Database Migration | Flyway | Dự kiến sử dụng |
+| IoT Communication | MQTT | Giao tiếp giữa backend và thiết bị |
+| MQTT Broker | Eclipse Mosquitto | Broker cho môi trường phát triển |
+| Testing | JUnit, Spring Boot Test | Unit Test và Integration Test |
+| API Testing | Postman | Kiểm thử REST API |
+| Deployment | Docker Compose | Chuẩn hóa môi trường triển khai |
+
+### Quy chuẩn môi trường phát triển
+
+- Tất cả thành viên sử dụng Java 21.
+- Backend sử dụng Spring Boot 4.1.2.
+- Sử dụng Maven Wrapper đi kèm repository thay vì phụ thuộc Maven cài đặt riêng trên máy.
+- Không tự ý thay đổi phiên bản Spring Boot hoặc Java khi chưa thống nhất với nhóm.
+- Các dependency phải ưu tiên sử dụng phiên bản được Spring Boot Dependency Management quản lý.
+- Không commit mật khẩu, API key, token hoặc thông tin xác thực thật lên Git repository.
+- Mọi thay đổi dependency phải được kiểm tra bằng `mvnw clean verify` trước khi tạo Pull Request.
+
 ## 4. Các module backend đề xuất
 
 | Module | Trách nhiệm chính |
@@ -223,18 +255,20 @@ Sơ đồ là luồng logic khái quát. Thiết kế chi tiết phải xử lý
 - **End-to-end test:** từ chọn sản phẩm đến kết quả phun và trạng thái tồn kho.
 - **Security test:** truy cập chéo tenant, thiếu quyền và dữ liệu đầu vào không hợp lệ.
 
-## 10. Các quyết định kiến trúc đề xuất
+## 10. Các quyết định kiến trúc đã thống nhất
 
-1. **Frontend:** Sử dụng một codebase React + TypeScript, tách giao diện Kiosk UI và Admin Portal theo route, layout và quyền truy cập.
-2. **Authentication:** Sử dụng Spring Security, JWT access token và refresh token; mật khẩu được hash an toàn. Backend kiểm tra RBAC và tenant scope trên từng request.
-3. **Payment:** Ưu tiên mock/sandbox provider trong giai đoạn phát triển và demo. Backend chịu trách nhiệm xác minh thanh toán và chống xử lý callback trùng.
-4. **IoT:** Sử dụng Eclipse Mosquitto làm MQTT broker và simulator trong giai đoạn đầu. Lệnh điều khiển dùng `commandId` duy nhất, xác thực thiết bị và cơ chế chống xử lý trùng.
-5. **Database migration:** Sử dụng MySQL 8.4 LTS, Spring Data JPA và Flyway để quản lý phiên bản schema.
-6. **State management:** Thống nhất vòng đời đơn hàng, thanh toán và lệnh phun; không cho phép một đơn đã thanh toán dẫn tới nhiều hơn một lần phun thành công.
-7. **Reconciliation:** Nếu kết quả phun không xác định, ghi nhận trạng thái cần đối soát và không tự động gửi lệnh phun mới cho cùng đơn hàng.
-8. **Demo deployment:** Sử dụng Docker Compose để chuẩn hóa môi trường backend, frontend, MySQL và MQTT broker; dùng `.env.example` để hướng dẫn cấu hình và không commit secret.
-
-**Trạng thái:** Đây là các quyết định kiến trúc đề xuất để nhóm review và xác nhận trước khi triển khai. Những thay đổi ảnh hưởng đến nhiều module phải được cập nhật đồng bộ trong SRS, API contract, ERD và tài liệu IoT.
+1. **Backend Framework:** Sử dụng Java Spring Boot 4.1.2 để xây dựng REST API.
+2. **Java Version:** Sử dụng Java 21 làm phiên bản Java mục tiêu cho toàn bộ backend.
+3. **Build Tool:** Sử dụng Maven Wrapper 3.10.0 để chuẩn hóa quá trình build giữa các thành viên.
+4. **Frontend:** Sử dụng React + TypeScript, tách giao diện Kiosk UI và Admin Portal theo route, layout và quyền truy cập.
+5. **API:** Sử dụng HTTPS REST/JSON với tiền tố /api/v1.
+6. **Authentication:** Dự kiến sử dụng Spring Security và JWT, kết hợp RBAC và tenant isolation.
+7. **Database:** Sử dụng MySQL; phiên bản máy chủ phải được nhóm xác nhận và thống nhất trong môi trường phát triển.
+8. **ORM và Migration:** Dự kiến sử dụng Spring Data JPA và Flyway.
+9. **Payment:** Sử dụng mock/sandbox provider trong giai đoạn phát triển. Backend chịu trách nhiệm xác minh thanh toán và chống xử lý callback trùng.
+10. **IoT:** Sử dụng MQTT và Eclipse Mosquitto kết hợp IoT Simulator trước khi tích hợp phần cứng ESP32.
+11. **Security & Reliability:** Mỗi đơn hàng chỉ được phun thành công tối đa một lần; command và payment callback phải có cơ chế idempotency.
+12. **Deployment:** Dự kiến sử dụng Docker Compose để chuẩn hóa môi trường backend, frontend, MySQL và MQTT broker.
 
 ## 11. Tài liệu tiếp theo
 
