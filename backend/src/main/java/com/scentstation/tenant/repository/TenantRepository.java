@@ -1,8 +1,9 @@
-package com.scentstation.repository;
+package com.scentstation.tenant.repository;
 
-import com.scentstation.entity.Tenant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import com.scentstation.tenant.entity.Tenant;
 
 import java.util.Optional;
 
