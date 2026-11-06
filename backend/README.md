@@ -14,6 +14,10 @@ Backend REST API của dự án ScentStation, được xây dựng bằng Java S
 | Packaging | Jar |
 | Web Framework | Spring MVC |
 | Validation | Spring Boot Validation |
+| Spring Data JPA | Quản lý truy cập dữ liệu |
+| Hibernate | ORM, schema validation|
+| MySQL Connector/J | JDBC Driver |
+| MySQL Server | 8.0.42 |
 
 ## 2. Yêu cầu môi trường
 
@@ -22,6 +26,7 @@ Trước khi chạy backend, cần cài đặt:
 - JDK 21 .
 - Git.
 - Visual Studio Code hoặc IntelliJ IDEA (tùy chọn).
+- MySQL Server 8.0.x.
 
 Project đã tích hợp Maven Wrapper nên không cần cài Maven riêng.
 
@@ -53,7 +58,63 @@ git pull origin main
 cd backend
 ```
 
-## 4. Chạy backend
+## 4. Database Setup
+
+Backend sử dụng MySQL 8.0.x để lưu trữ dữ liệu.
+
+### 4.1. Tạo database
+
+Database được đặt tên:
+
+` scentstation `
+
+Nếu chưa có database, thực hiện:
+
+```sql
+CREATE DATABASE scentstation;
+```
+
+### 4.2. Khởi tạo cấu trúc database
+
+Tại thư mục gốc repository, thực thi hai file SQL theo thứ tự:
+
+1. `database/schema.sql`
+2. `database/seed.sql`
+
+Các file này tạo cấu trúc bảng và dữ liệu khởi tạo cho hệ thống.
+
+### 4.3. Cấu hình thông tin kết nối
+
+Backend sử dụng biến môi trường:
+
+- `DB_USERNAME`: tài khoản MySQL.
+- `DB_PASSWORD`: mật khẩu MySQL.
+
+Ví dụ trên PowerShell:
+
+```powershell
+$env:DB_USERNAME="root"
+$env:DB_PASSWORD="your_mysql_password"
+```
+
+Không commit thông tin xác thực thật lên GitHub.
+
+## 5. Cấu hình môi trường - Database and JPA Configuration
+
+Backend sử dụng Spring Data JPA kết hợp Hibernate để ánh xạ Java Entity với các bảng trong MySQL.
+
+Cấu hình trong `application.properties`:
+
+- Database: `scentstation`
+- Hibernate DDL mode: `validate`
+- SQL logging: Enabled
+- Open Session in View: Disabled
+
+Hibernate sử dụng chế độ `validate` để kiểm tra cấu trúc Entity
+với database hiện có, không tự động tạo hoặc thay đổi bảng.
+
+
+## 6. Chạy backend
 
 ### Cách 1: Chạy bằng Maven Wrapper (khuyến nghị)
 
@@ -93,15 +154,24 @@ java -jar target/scentstation-backend-0.0.1-SNAPSHOT.jar
 
 Để dừng ứng dụng, nhấn `Ctrl + C`.
 
-## 5. Kiểm tra API
+## 7. API Endpoints
 
-Sau khi backend khởi động, mở trình duyệt hoặc Postman và gửi GET request:
+Backend hiện cung cấp các REST API cơ bản:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/health` | Kiểm tra trạng thái backend |
+| GET | `/api/v1/tenants` | Lấy danh sách tenant |
+
+### Health Check
+
+Request:
 
 ```http
 GET http://localhost:8080/api/v1/health
 ```
 
-Kết quả mong đợi:
+Response:
 
 ```json
 {
@@ -110,9 +180,30 @@ Kết quả mong đợi:
 }
 ```
 
-Nếu nhận được response trên, backend đã khởi động và API Health Check hoạt động bình thường.
+### Get All Tenants
 
-## 6. Chạy kiểm thử
+Request:
+
+```http
+GET http://localhost:8080/api/v1/tenants
+```
+
+Response mẫu:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "ScentStation Demo",
+    "code": "SCENT-DEMO",
+    "status": "ACTIVE",
+    "createdAt": "2026-10-28T17:33:51",
+    "updatedAt": "2026-10-28T17:33:51"
+  }
+]
+```
+
+## 8. Chạy kiểm thử
 
 Chạy toàn bộ quá trình clean, compile và test:
 
@@ -126,7 +217,8 @@ Nếu thành công, Maven sẽ hiển thị:
 BUILD SUCCESS
 ```
 
-## 7. Cấu trúc thư mục
+## 9. Cấu trúc thư mục
+
 
 ```text
 backend/
@@ -138,7 +230,12 @@ backend/
 │   │   ├── java/
 │   │   │   └── com/scentstation/
 │   │   │       ├── controller/
-│   │   │       │   └── HealthController.java
+│   │   │       │   ├── HealthController.java
+│   │   │       │   └── TenantController.java
+│   │   │       ├── entity/
+│   │   │       │   └── Tenant.java
+│   │   │       ├── repository/
+│   │   │       │   └── TenantRepository.java
 │   │   │       └── ScentstationBackendApplication.java
 │   │   └── resources/
 │   │       └── application.properties
@@ -150,11 +247,13 @@ backend/
 └── README.md
 ```
 
-## 8. Lưu ý
+
+## 10. Lưu ý
 
 - Chạy các lệnh Maven Wrapper tại thư mục `backend`.
 - Backend sử dụng cổng mặc định `8080`.
 - Nếu cổng `8080` đang được ứng dụng khác sử dụng, cần giải phóng cổng hoặc thay đổi cấu hình.
 - Không commit mật khẩu, API key, token hoặc thông tin xác thực lên GitHub.
-- Các dependency và cấu hình database, authentication, MQTT sẽ được bổ sung trong các task tiếp theo.
+- Database và JPA đã được tích hợp trong phiên bản backend hiện tại.
+- Authentication, authorization và MQTT sẽ được triển khai trong các task tiếp theo.
 - Thành viên cần pull source code mới nhất trước khi làm việc.
