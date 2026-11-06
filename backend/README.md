@@ -1,44 +1,48 @@
-# Backend — ScentStation
+# ScentStation Backend
 
+Backend của dự án **ScentStation – Nền tảng IoT đa thương hiệu cho máy trải nghiệm và quản lý nước hoa**.
 
-Backend REST API của dự án ScentStation, được xây dựng bằng Java Spring Boot.
+Tài liệu này hướng dẫn thành viên mới cài đặt môi trường, clone source code, khởi tạo database, cấu hình kết nối và chạy backend trên máy cá nhân.
+
+---
 
 ## 1. Công nghệ sử dụng
 
-| Công nghệ | Phiên bản |
+| Công nghệ | Phiên bản / Mô tả |
 |---|---|
-| Java | 21 (Java target) |
+| Java | JDK 21 |
 | Spring Boot | 4.1.2 |
-| Apache Maven | 3.10.0 |
-| Maven Wrapper | 3.3.4 |
-| Packaging | Jar |
-| Web Framework | Spring MVC |
-| Validation | Spring Boot Validation |
-| Spring Data JPA | Quản lý truy cập dữ liệu |
-| Hibernate | ORM, schema validation|
-| MySQL Connector/J | JDBC Driver |
-| MySQL Server | 8.0.42 |
+| Maven | Maven Wrapper, sử dụng Maven 3.10.0 |
+| MySQL | 8.0 trở lên |
+| Spring Data JPA | ORM và truy cập dữ liệu |
+| Hibernate | Kiểm tra cấu trúc database |
+| Lombok | Giảm code boilerplate |
+| Spring Boot Validation | Kiểm tra dữ liệu đầu vào |
 
 ## 2. Yêu cầu môi trường
 
-Trước khi chạy backend, cần cài đặt:
+Trước khi chạy project, cần cài đặt:
 
-- JDK 21 .
-- Git.
-- Visual Studio Code hoặc IntelliJ IDEA (tùy chọn).
-- MySQL Server 8.0.x.
+1. **JDK 21:** Cài đặt Java Development Kit phiên bản 21.
+2. **Git:** Dùng để clone và cập nhật source code.
+3. **MySQL Server 8.0+:** Dùng để lưu trữ dữ liệu.
+4. **MySQL Workbench:** Khuyến nghị sử dụng để quản lý database.
+5. **IDE:** Khuyến nghị IntelliJ IDEA hoặc Visual Studio Code.
 
-Project đã tích hợp Maven Wrapper nên không cần cài Maven riêng.
-
-Kiểm tra Java:
+Kiểm tra Java và Git bằng PowerShell:
 
 ```powershell
 java -version
+git --version
 ```
 
-## 3. Lấy source code
+Đảm bảo Java hiển thị phiên bản 21.
 
-Clone repository:
+Project đã tích hợp Maven Wrapper nên không cần cài Maven riêng.
+
+## 3. Clone project
+
+Mở PowerShell tại thư mục muốn lưu project và chạy:
 
 ```powershell
 git clone https://github.com/CamTupn/ProjectJava.git
@@ -50,128 +54,199 @@ Di chuyển vào thư mục backend:
 cd ProjectJava/backend
 ```
 
-Nếu đã clone repository trước đó:
+Kiểm tra các file trong thư mục:
 
 ```powershell
-cd ProjectJava
-git pull origin main
-cd backend
+dir
 ```
 
-## 4. Database Setup
+Cần thấy các file/thư mục chính như:
 
-Backend sử dụng MySQL 8.0.x để lưu trữ dữ liệu.
+- `pom.xml`
+- `mvnw`
+- `mvnw.cmd`
+- `src`
+- `target` (có thể chưa xuất hiện trước lần build đầu tiên)
 
-### 4.1. Tạo database
+## 4. Khởi tạo Database
 
-Database được đặt tên:
+### 4.1. Tạo database và các bảng
 
-` scentstation `
+ScentStation sử dụng MySQL 8.0 trở lên.
 
-Nếu chưa có database, thực hiện:
+Các file SQL nằm trong thư mục `database/` ở thư mục gốc repository:
+
+```text
+ProjectJava/
+├── backend/
+└── database/
+    ├── schema.sql
+    ├── seed.sql
+    └── README.md
+```
+
+Mở PowerShell tại thư mục gốc `ProjectJava` và chạy:
+
+```powershell
+Get-Content ".\database\schema.sql" -Raw | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p
+```
+
+Nhập mật khẩu MySQL khi được yêu cầu.
+
+**Lưu ý:**
+- Đường dẫn trên là đường dẫn cài đặt MySQL mặc định trên Windows.
+- Nếu MySQL được cài ở vị trí khác, hãy thay đường dẫn `mysql.exe` tương ứng.
+- Tài khoản MySQL cần có quyền tạo database và bảng.
+- Nếu đã có database chứa dữ liệu cần giữ, không chạy lại schema một cách tùy tiện.
+
+### 4.2. Nạp dữ liệu mẫu
+
+Sau khi tạo schema thành công, tiếp tục chạy:
+
+```powershell
+Get-Content ".\database\seed.sql" -Raw | & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -u root -p
+```
+
+Lệnh này nạp dữ liệu mẫu, bao gồm tenant demo và các vai trò hệ thống.
+
+### 4.3. Kiểm tra Database
+
+Đăng nhập MySQL và chạy:
 
 ```sql
-CREATE DATABASE scentstation;
+USE scentstation;
+
+SHOW TABLES;
+
+SELECT COUNT(*) AS total_tables
+FROM information_schema.tables
+WHERE table_schema = 'scentstation'
+  AND table_type = 'BASE TABLE';
+
+SELECT * FROM tenants;
+SELECT * FROM roles;
 ```
 
-### 4.2. Khởi tạo cấu trúc database
+Số lượng bảng dự kiến: **21 bảng**.
 
-Tại thư mục gốc repository, thực thi hai file SQL theo thứ tự:
+## 5. Cấu hình kết nối Database
 
-1. `database/schema.sql`
-2. `database/seed.sql`
+Mở file:
 
-Các file này tạo cấu trúc bảng và dữ liệu khởi tạo cho hệ thống.
+```text
+backend/src/main/resources/application.properties
+```
 
-### 4.3. Cấu hình thông tin kết nối
+Cấu hình kết nối hiện tại:
 
-Backend sử dụng biến môi trường:
+```properties
+spring.application.name=scentstation-backend
 
-- `DB_USERNAME`: tài khoản MySQL.
-- `DB_PASSWORD`: mật khẩu MySQL.
+server.port=8080
+server.servlet.context-path=/
 
-Ví dụ trên PowerShell:
+# API
+app.api.base-path=/api/v1
+
+# Database Configuration
+spring.datasource.url=jdbc:mysql://localhost:3306/scentstation
+spring.datasource.username=${DB_USERNAME:root}
+spring.datasource.password=${DB_PASSWORD}
+
+# JPA / Hibernate Configuration
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.open-in-view=false
+```
+
+### 5.1. Khai báo biến môi trường
+
+Mở PowerShell tại thư mục `backend` và khai báo:
 
 ```powershell
 $env:DB_USERNAME="root"
-$env:DB_PASSWORD="your_mysql_password"
+$env:DB_PASSWORD="mat_khau_mysql_cua_ban"
 ```
 
-Không commit thông tin xác thực thật lên GitHub.
+Thay `mat_khau_mysql_cua_ban` bằng mật khẩu MySQL trên máy của bạn.
 
-## 5. Cấu hình môi trường - Database and JPA Configuration
+Nếu sử dụng tài khoản khác `root`, hãy thay giá trị `DB_USERNAME` tương ứng.
 
-Backend sử dụng Spring Data JPA kết hợp Hibernate để ánh xạ Java Entity với các bảng trong MySQL.
+**Quan trọng:**
+- Không đưa mật khẩu MySQL thật vào Git.
+- Không sửa trực tiếp mật khẩu cá nhân vào `application.properties`.
+- Các biến môi trường được khai báo trong PowerShell chỉ áp dụng cho phiên terminal hiện tại. Nếu mở terminal mới, cần khai báo lại.
 
-Cấu hình trong `application.properties`:
+## 6. Build và chạy Backend
 
-- Database: `scentstation`
-- Hibernate DDL mode: `validate`
-- SQL logging: Enabled
-- Open Session in View: Disabled
+Đảm bảo bạn đang đứng trong thư mục `backend` và đã khai báo biến môi trường ở bước 5.
 
-Hibernate sử dụng chế độ `validate` để kiểm tra cấu trúc Entity
-với database hiện có, không tự động tạo hoặc thay đổi bảng.
+### 6.1. Build project
 
-
-## 6. Chạy backend
-
-### Cách 1: Chạy bằng Maven Wrapper (khuyến nghị)
-
-Tại thư mục `backend`, chạy:
-
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-Khi ứng dụng khởi động thành công, backend mặc định chạy tại:
-
-```text
-http://localhost:8080
-```
-
-Giữ terminal đang chạy để backend tiếp tục hoạt động.
-
-Để dừng ứng dụng, nhấn:
-
-```text
-Ctrl + C
-```
-
-### Cách 2: Build và chạy file JAR
-
-Build project:
+Chạy:
 
 ```powershell
 .\mvnw.cmd clean package
 ```
 
-Sau khi build thành công, chạy:
+Nếu build thành công, Maven hiển thị:
+
+```text
+BUILD SUCCESS
+```
+
+### 6.2. Chạy ứng dụng
+
+Chạy:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+Khi ứng dụng khởi động thành công, console sẽ hiển thị thông tin Spring Boot và Tomcat chạy tại cổng `8080`.
+
+Backend mặc định sử dụng:
+
+```text
+http://localhost:8080
+```
+
+API base path:
+
+```text
+http://localhost:8080/api/v1
+```
+
+Để dừng ứng dụng, nhấn `Ctrl + C` trong terminal.
+
+### 6.3. Chạy file JAR (tùy chọn)
+
+Sau khi build thành công, có thể chạy file JAR bằng:
 
 ```powershell
 java -jar target/scentstation-backend-0.0.1-SNAPSHOT.jar
 ```
 
-Để dừng ứng dụng, nhấn `Ctrl + C`.
+## 7. Kiểm tra API
 
-## 7. API Endpoints
+Sau khi backend khởi động thành công, có thể kiểm tra bằng trình duyệt, Postman hoặc công cụ API tương đương.
 
-Backend hiện cung cấp các REST API cơ bản:
-
-| Method | Endpoint | Description |
+| Method | Endpoint | Mục đích |
 |---|---|---|
 | GET | `/api/v1/health` | Kiểm tra trạng thái backend |
 | GET | `/api/v1/tenants` | Lấy danh sách tenant |
+| GET | `/api/v1/tenants/{id}` | Lấy thông tin tenant theo ID |
 
-### Health Check
+### 7.1. Kiểm tra Health API
 
-Request:
+Gửi request:
 
 ```http
 GET http://localhost:8080/api/v1/health
 ```
 
-Response:
+Kết quả mong đợi:
 
 ```json
 {
@@ -180,80 +255,128 @@ Response:
 }
 ```
 
-### Get All Tenants
+### 7.2. Lấy danh sách Tenant
 
-Request:
+Gửi request:
 
 ```http
 GET http://localhost:8080/api/v1/tenants
 ```
 
-Response mẫu:
+API trả về danh sách tenant hiện có trong database.
 
-```json
-[
-  {
-    "id": 1,
-    "name": "ScentStation Demo",
-    "code": "SCENT-DEMO",
-    "status": "ACTIVE",
-    "createdAt": "2026-10-28T17:33:51",
-    "updatedAt": "2026-10-28T17:33:51"
-  }
-]
+### 7.3. Lấy Tenant theo ID
+
+Gửi request:
+
+```http
+GET http://localhost:8080/api/v1/tenants/1
 ```
 
-## 8. Chạy kiểm thử
+Thay `1` bằng ID tenant đang tồn tại trong database.
 
-Chạy toàn bộ quá trình clean, compile và test:
+## 8. Chạy Unit Test
+
+Để chạy toàn bộ test:
+
+```powershell
+.\mvnw.cmd test
+```
+
+Hoặc chạy kiểm tra đầy đủ:
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-Nếu thành công, Maven sẽ hiển thị:
+Nếu tất cả test thành công, Maven hiển thị:
 
 ```text
 BUILD SUCCESS
 ```
 
-## 9. Cấu trúc thư mục
+Kết quả test được lưu trong:
 
+```text
+backend/target/surefire-reports/
+```
+
+## 9. Cấu trúc Backend
 
 ```text
 backend/
-├── .mvn/
-│   └── wrapper/
-│       └── maven-wrapper.properties
 ├── src/
 │   ├── main/
-│   │   ├── java/
-│   │   │   └── com/scentstation/
+│   │   ├── java/com/scentstation/
+│   │   │   ├── common/
+│   │   │   │   ├── config/
+│   │   │   │   ├── exception/
+│   │   │   │   └── response/
+│   │   │   ├── health/
+│   │   │   │   └── controller/
+│   │   │   └── tenant/
 │   │   │       ├── controller/
-│   │   │       │   ├── HealthController.java
-│   │   │       │   └── TenantController.java
+│   │   │       ├── dto/
 │   │   │       ├── entity/
-│   │   │       │   └── Tenant.java
+│   │   │       ├── mapper/
 │   │   │       ├── repository/
-│   │   │       │   └── TenantRepository.java
-│   │   │       └── ScentstationBackendApplication.java
+│   │   │       └── service/
 │   │   └── resources/
 │   │       └── application.properties
 │   └── test/
-├── .gitignore
+│       └── java/com/scentstation/
 ├── mvnw
 ├── mvnw.cmd
-├── pom.xml
-└── README.md
+└── pom.xml
 ```
 
+## 10. Cập nhật source code mới nhất
 
-## 10. Lưu ý
+Khi nhóm có thành viên merge code mới vào nhánh `main`, các thành viên cần cập nhật source code trước khi tiếp tục làm việc.
 
-- Chạy các lệnh Maven Wrapper tại thư mục `backend`.
-- Backend sử dụng cổng mặc định `8080`.
-- Nếu cổng `8080` đang được ứng dụng khác sử dụng, cần giải phóng cổng hoặc thay đổi cấu hình.
-- Không commit mật khẩu, API key, token hoặc thông tin xác thực lên GitHub.
-- Database và JPA đã được tích hợp trong phiên bản backend hiện tại.
-- Authentication, authorization và MQTT sẽ được triển khai trong các task tiếp theo.
-- Thành viên cần pull source code mới nhất trước khi làm việc.
+Mở PowerShell tại thư mục repository:
+
+```powershell
+cd ProjectJava
+git pull origin main
+```
+
+Sau đó di chuyển vào backend:
+
+```powershell
+cd backend
+```
+
+Nếu có thay đổi dependency, nên chạy lại:
+
+```powershell
+.\mvnw.cmd clean package
+```
+
+## 11. Một số lỗi thường gặp
+
+| Lỗi | Nguyên nhân có thể | Cách xử lý |
+|---|---|---|
+| `Unknown database 'scentstation'` | Chưa tạo database | Thực hiện lại bước 4 |
+| `Access denied for user` | Sai username hoặc password | Kiểm tra `DB_USERNAME`, `DB_PASSWORD` |
+| `Communications link failure` | MySQL chưa chạy hoặc sai cổng | Kiểm tra MySQL Server và cổng 3306 |
+| `Schema-validation: missing table` | Database thiếu bảng hoặc schema không khớp entity | Kiểm tra và khởi tạo lại schema đúng phiên bản |
+| `Port 8080 was already in use` | Có ứng dụng khác sử dụng cổng 8080 | Dừng ứng dụng đang chiếm cổng hoặc cấu hình cổng khác |
+| `JAVA_HOME` hoặc Java version error | Chưa cài hoặc cấu hình sai JDK | Kiểm tra JDK 21 và biến môi trường |
+| `DB_PASSWORD` unresolved | Chưa khai báo biến môi trường | Khai báo `DB_PASSWORD` trong PowerShell rồi chạy lại |
+
+## 12. Lưu ý khi làm việc nhóm
+
+- Luôn cập nhật code từ `main` trước khi bắt đầu công việc mới.
+- Tạo branch riêng cho từng task hoặc feature.
+- Không commit mật khẩu, thông tin kết nối cá nhân hoặc dữ liệu nhạy cảm.
+- Không tự ý thay đổi schema database khi chưa thống nhất với nhóm.
+- Khi thêm dependency, cần kiểm tra và cập nhật `pom.xml`.
+- Sau khi hoàn thành chức năng, chạy test trước khi tạo Pull Request.
+- Không tự ý xóa hoặc khởi tạo lại database nếu đang có dữ liệu cần giữ.
+
+---
+
+**ScentStation Backend – Development Guide**
+
+Tài liệu này áp dụng cho trạng thái backend hiện tại. Các module như Authentication, Authorization, MQTT và những chức năng nghiệp vụ khác sẽ được cập nhật khi nhóm triển khai các task tiếp theo.
