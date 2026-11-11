@@ -1,4 +1,4 @@
-package com.scentstation.tenant.dto.response;
+package com.scentstation.dto.response;
 
 import java.time.LocalDateTime;
 
