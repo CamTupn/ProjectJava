@@ -1,4 +1,4 @@
-package com.scentstation.common.exception;
+package com.scentstation.exception;
 
 import com.scentstation.common.response.ApiResponse;
 

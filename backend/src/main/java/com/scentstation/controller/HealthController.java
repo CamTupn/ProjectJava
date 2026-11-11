@@ -1,4 +1,4 @@
-package com.scentstation.health.controller;
+package com.scentstation.controller;
 
 import java.util.Map;
 

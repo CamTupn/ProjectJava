@@ -1,4 +1,4 @@
-package com.scentstation.tenant.entity;
+package com.scentstation.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;

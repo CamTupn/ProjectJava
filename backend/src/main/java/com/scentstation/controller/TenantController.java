@@ -1,7 +1,7 @@
-package com.scentstation.tenant.controller;
+package com.scentstation.controller;
 
-import com.scentstation.tenant.dto.response.TenantResponse;
-import com.scentstation.tenant.service.TenantService;
+import com.scentstation.dto.response.TenantResponse;
+import com.scentstation.service.TenantService;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

@@ -1,8 +1,4 @@
-
-package com.scentstation.tenant.controller;
-
-import com.scentstation.tenant.dto.response.TenantResponse;
-import com.scentstation.tenant.service.TenantService;
+package com.scentstation.controller;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +14,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.scentstation.common.exception.ResourceNotFoundException;
+import com.scentstation.dto.response.TenantResponse;
+import com.scentstation.exception.ResourceNotFoundException;
+import com.scentstation.service.TenantService;
 
 @WebMvcTest(TenantController.class)
 class TenantControllerTest {

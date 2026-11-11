@@ -1,7 +1,7 @@
-package com.scentstation.tenant.mapper;
+package com.scentstation.mapper;
 
-import com.scentstation.tenant.dto.response.TenantResponse;
-import com.scentstation.tenant.entity.Tenant;
+import com.scentstation.dto.response.TenantResponse;
+import com.scentstation.entity.Tenant;
 
 import org.springframework.stereotype.Component;
 
