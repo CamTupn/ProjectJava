@@ -1,7 +1,13 @@
 package com.scentstation.controller;
 
+import com.scentstation.dto.response.TenantResponse;
+import com.scentstation.exception.ResourceNotFoundException;
+import com.scentstation.service.JwtService;
+import com.scentstation.service.TenantService;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -14,11 +20,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.scentstation.dto.response.TenantResponse;
-import com.scentstation.exception.ResourceNotFoundException;
-import com.scentstation.service.TenantService;
-
 @WebMvcTest(TenantController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class TenantControllerTest {
 
     @Autowired
@@ -26,6 +29,9 @@ class TenantControllerTest {
 
     @MockitoBean
     private TenantService tenantService;
+
+    @MockitoBean
+    private JwtService jwtService;
 
     private final LocalDateTime now = LocalDateTime.of(
             2026, 11, 6, 10, 0, 0
@@ -113,4 +119,6 @@ class TenantControllerTest {
                 .andExpect(jsonPath("$.errors.id")
                         .value("Expected type: Long"));
     }
+
+    
 }
