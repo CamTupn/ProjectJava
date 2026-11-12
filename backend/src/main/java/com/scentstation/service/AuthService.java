@@ -12,16 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Service
 public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
     public AuthService(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     @Transactional(readOnly = true)
@@ -74,6 +80,22 @@ public class AuthService {
         }
 
         response.setRoles(roles);
+        // Generate JWT claims
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getId());
+        claims.put("tenantCode",
+                user.getTenant() != null
+                        ? user.getTenant().getCode()
+                        : null);
+        claims.put("roles", roles);
+
+        // Generate access token
+        String accessToken = jwtService.generateToken(
+                user.getUsername(),
+                claims
+        );
+
+        response.setAccessToken(accessToken);
         return response;
     }
 }

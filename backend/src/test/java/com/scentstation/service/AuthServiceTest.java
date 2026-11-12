@@ -23,6 +23,9 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -32,6 +35,9 @@ class AuthServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private JwtService jwtService;
 
     @InjectMocks
     private AuthService authService;
@@ -58,6 +64,8 @@ class AuthServiceTest {
         activeUser.setStatus("ACTIVE");
         activeUser.setTenant(tenant);
         activeUser.setRoles(new HashSet<>(Set.of(role)));
+        lenient().when(jwtService.generateToken(anyString(), anyMap()))
+                .thenReturn("mock-jwt-token");
     }
 
     private LoginRequest createRequest(String identifier, String password) {

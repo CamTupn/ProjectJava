@@ -10,6 +10,7 @@ public class AuthResponse {
     private String fullName;
     private String tenantCode;
     private Set<String> roles;
+    private String accessToken;
 
     public AuthResponse() {}
 
@@ -53,5 +54,12 @@ public class AuthResponse {
     }
     public void setRoles(Set<String> roles) {
         this.roles = roles;
+    }
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
     }
 }
