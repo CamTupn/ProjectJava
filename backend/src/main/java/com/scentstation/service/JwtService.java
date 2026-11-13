@@ -13,6 +13,9 @@ import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class JwtService {
@@ -49,6 +52,70 @@ public class JwtService {
     // Extract username
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
+    }
+
+    // Extract user ID
+    public Long extractUserId(String token) {
+
+        Object userId = extractClaim(
+                token,
+                claims -> claims.get("userId")
+        );
+
+        if (userId instanceof Number number) {
+            return number.longValue();
+        }
+
+        return null;
+    }
+
+    // Extract tenant ID
+    public Long extractTenantId(String token) {
+
+        Object tenantId = extractClaim(
+                token,
+                claims -> claims.get("tenantId")
+        );
+
+        if (tenantId instanceof Number number) {
+            return number.longValue();
+        }
+
+        return null;
+    }
+
+    // Extract tenant code
+    public String extractTenantCode(String token) {
+        return extractClaim(
+                token,
+                claims -> claims.get("tenantCode", String.class)
+        );
+    }
+
+    // Extract full name
+    public String extractFullName(String token) {
+        return extractClaim(
+                token,
+                claims -> claims.get("fullName", String.class)
+        );
+    }
+
+    // Extract roles from JWT
+    public List<String> extractRoles(String token) {
+
+        Object roles = extractClaim(
+                token,
+                claims -> claims.get("roles")
+        );
+
+        if (!(roles instanceof Collection<?> roleCollection)) {
+            return List.of();
+        }
+
+        return roleCollection.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .collect(Collectors.toList());
     }
 
     // Extract a specific claim

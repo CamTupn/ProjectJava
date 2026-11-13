@@ -82,11 +82,20 @@ public class AuthService {
         response.setRoles(roles);
         // Generate JWT claims
         Map<String, Object> claims = new HashMap<>();
+
         claims.put("userId", user.getId());
+        claims.put("fullName", user.getFullName());
+
+        claims.put("tenantId",
+                user.getTenant() != null
+                        ? user.getTenant().getId()
+                        : null);
+
         claims.put("tenantCode",
                 user.getTenant() != null
                         ? user.getTenant().getCode()
                         : null);
+
         claims.put("roles", roles);
 
         // Generate access token

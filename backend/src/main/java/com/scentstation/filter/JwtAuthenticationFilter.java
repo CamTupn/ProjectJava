@@ -1,6 +1,6 @@
-
 package com.scentstation.filter;
 
+import com.scentstation.common.security.CurrentUserPrincipal;
 import com.scentstation.service.JwtService;
 
 import jakarta.servlet.FilterChain;
@@ -9,15 +9,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -41,7 +41,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String username = null;
         String jwt = null;
 
-        // Read Bearer Token
+        // 1. Read Bearer Token
         if (authorizationHeader != null
                 && authorizationHeader.startsWith("Bearer ")) {
 
@@ -50,28 +50,50 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 username = jwtService.extractUsername(jwt);
             } catch (Exception exception) {
-                // Invalid or expired token:
-                // Continue without authentication.
+                // Invalid or expired token.
             }
         }
 
-        // Set authentication if token is valid
+        // 2. Validate token
         if (username != null
                 && SecurityContextHolder.getContext()
-                        .getAuthentication() == null) {
+                        .getAuthentication() == null
+                && jwtService.isTokenValid(jwt, username)) {
 
-            if (jwtService.isTokenValid(jwt, username)) {
+            try {
+                // 3. Extract user information
+                Long userId = jwtService.extractUserId(jwt);
+                Long tenantId = jwtService.extractTenantId(jwt);
+                String tenantCode = jwtService.extractTenantCode(jwt);
 
-                UserDetails userDetails = User.withUsername(username)
-                        .password("")
-                        .authorities(Collections.emptyList())
-                        .build();
+                Set<String> roles = Set.copyOf(
+                        jwtService.extractRoles(jwt)
+                );
 
+                // 4. Convert roles to Spring Security authorities
+                List<SimpleGrantedAuthority> authorities =
+                        roles.stream()
+                                .map(role -> new SimpleGrantedAuthority(
+                                        "ROLE_" + role
+                                ))
+                                .toList();
+
+                // 5. Create current user principal
+                CurrentUserPrincipal principal =
+                        new CurrentUserPrincipal(
+                                userId,
+                                username,
+                                tenantId,
+                                tenantCode,
+                                roles
+                        );
+
+                // 6. Create authentication
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
-                                userDetails,
+                                principal,
                                 null,
-                                userDetails.getAuthorities()
+                                authorities
                         );
 
                 authentication.setDetails(
@@ -79,8 +101,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 .buildDetails(request)
                 );
 
+                // 7. Save authentication to Security Context
                 SecurityContextHolder.getContext()
                         .setAuthentication(authentication);
+
+            } catch (Exception exception) {
+                SecurityContextHolder.clearContext();
             }
         }
 
