@@ -2,6 +2,7 @@ package com.scentstation.exception;
 
 import com.scentstation.common.response.ApiResponse;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -64,7 +65,7 @@ public class GlobalExceptionHandler {
                 ));
     }
 
-    
+
     // Handle resource not found (404)
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(
@@ -112,4 +113,16 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(message, errors));
     }
 
+        // Handle access denied (403)
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<ApiResponse<Void>> handleAccessDenied(
+            AccessDeniedException ex) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(
+                        "You do not have permission to access this resource",
+                        Map.of()
+                    ));
+        }
 }

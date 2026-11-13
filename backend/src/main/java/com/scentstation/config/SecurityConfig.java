@@ -1,7 +1,12 @@
-
 package com.scentstation.config;
 
 import com.scentstation.filter.JwtAuthenticationFilter;
+
+import tools.jackson.databind.ObjectMapper;
+
+import com.scentstation.common.response.ApiResponse;
+
+import java.util.Map;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,9 +18,11 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -45,7 +52,21 @@ public class SecurityConfig {
                 .authenticationEntryPoint(
                     new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)
                 )
-        )
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setStatus(HttpStatus.FORBIDDEN.value());
+                    response.setContentType("application/json");
+                    response.setCharacterEncoding("UTF-8");
+
+                    ApiResponse<Void> body = ApiResponse.error(
+                        "You do not have permission to access this resource",
+                        Map.of()
+                    );
+
+                    response.getWriter().write(
+                        new ObjectMapper().writeValueAsString(body)
+                    );
+                })
+            )
 
             // Configure public and protected endpoints
             .authorizeHttpRequests(auth -> auth
