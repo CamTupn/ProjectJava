@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -220,21 +219,35 @@ class AuthServiceTest {
     // 7. Platform Super Admin không thuộc Tenant
     @Test
     void loginWithoutTenantShouldReturnNullTenantCode() {
+        activeUser.setUsername("platformadmin");
+        activeUser.setEmail("platform@scentstation.com");
+        activeUser.setFullName("Platform Administrator");
         activeUser.setTenant(null);
 
-        LoginRequest request =
-                createRequest("brandadmin", "Scent123456");
+        Role superAdminRole = new Role();
+        superAdminRole.setId(1L);
+        superAdminRole.setCode("PLATFORM_SUPER_ADMIN");
+        superAdminRole.setName("Platform Super Admin");
 
-        when(userRepository.findByUsername("brandadmin"))
+        activeUser.setRoles(new HashSet<>(Set.of(superAdminRole)));
+
+        LoginRequest request =
+            createRequest("platformadmin", "Scent123456");
+
+        when(userRepository.findByUsername("platformadmin"))
                 .thenReturn(Optional.of(activeUser));
 
         when(passwordEncoder.matches(
                 "Scent123456", "encoded-password"))
                 .thenReturn(true);
-
+        
         AuthResponse response = authService.login(request);
-
+        
         assertNotNull(response);
+        assertEquals("platformadmin", response.getUsername());
         assertNull(response.getTenantCode());
+        assertTrue(
+            response.getRoles().contains("PLATFORM_SUPER_ADMIN")
+        );
     }
 }

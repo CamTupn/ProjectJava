@@ -1,4 +1,3 @@
-
 package com.scentstation.service;
 
 import org.junit.jupiter.api.BeforeEach;
