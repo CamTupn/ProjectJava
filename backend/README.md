@@ -698,8 +698,16 @@ Cần gửi Bearer Token và Request Body theo DTO cập nhật Tenant hiện đ
 | GET | `/api/v1/users` | Lấy danh sách User |
 | GET | `/api/v1/users/{id}` | Lấy User theo ID |
 | PUT | `/api/v1/users/{id}` | Cập nhật User |
+| GET | `/api/v1/machines/{machineId}/slots` | Lấy danh sách Slot của máy và tổng số Slot |
+| POST | `/api/v1/machines/{machineId}/slots` | Tạo Slot |
+| GET | `/api/v1/machine-slots/{id}` | Lấy chi tiết Slot |
+| PUT | `/api/v1/machine-slots/{id}` | Cập nhật cấu hình Slot, không cập nhật lượng tồn |
+| PATCH | `/api/v1/machine-slots/{id}/status` | Cập nhật trạng thái lỗi/khôi phục Slot |
+| DELETE | `/api/v1/machine-slots/{id}` | Vô hiệu hóa Slot (soft delete) |
 
 Ngoài ra, Backend có các endpoint kiểm thử phân quyền dưới `/api/v1/test/authorization`.
+
+Machine Slot APIs enforce role and tenant access through the parent Machine and optional Product. Slot status is calculated from inventory volume and the warning threshold, with `ERROR` allowed as an operational override. Non-zero stock supplied on slot creation is recorded atomically as an `ADJUSTMENT` inventory transaction. A slot with remaining stock cannot be disabled until inventory is handled through the inventory-removal workflow.
 
 Các endpoint nghiệp vụ khác sẽ được bổ sung khi nhóm hoàn thành từng task. Không giả định endpoint đã tồn tại nếu chưa được triển khai trong source code.
 
