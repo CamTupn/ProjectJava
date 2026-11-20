@@ -1,5 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
+import { useAuth } from './auth/AuthContext'
+import ProtectedRoute from './auth/ProtectedRoute'
+import LoginPage from './pages/auth/LoginPage'
+
 import AdminLayout from './layouts/AdminLayout'
 import TenantAdminLayout from './layouts/TenantAdminLayout'
 
@@ -31,36 +35,60 @@ import PaymentPage from './pages/kiosk/PaymentPage'
 import DispensingPage from './pages/kiosk/DispensingPage'
 import ResultPage from './pages/kiosk/ResultPage'
 
+function HomeRedirect() {
+  const { user } = useAuth()
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+
+  return (
+    <Navigate
+      to={
+        user.role === 'SUPER_ADMIN'
+          ? '/admin'
+          : '/tenant-admin/dashboard'
+      }
+      replace
+    />
+  )
+}
+
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/admin" replace />} />
+      <Route path="/" element={<HomeRedirect />} />
+      <Route path="/login" element={<LoginPage />} />
 
       {/* SUPER ADMIN */}
-      <Route path="/admin" element={<AdminLayout />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="tenants" element={<TenantsPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="locations" element={<LocationsPage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="machines" element={<MachinesPage />} />
-        <Route path="slots" element={<SlotsPage />} />
-        <Route path="orders" element={<OrdersPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+      <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="tenants" element={<TenantsPage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="locations" element={<LocationsPage />} />
+          <Route path="products" element={<ProductsPage />} />
+          <Route path="machines" element={<MachinesPage />} />
+          <Route path="slots" element={<SlotsPage />} />
+          <Route path="orders" element={<OrdersPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
       </Route>
 
       {/* TENANT ADMIN */}
-      <Route path="/tenant-admin" element={<TenantAdminLayout />}>
-        <Route index element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<TenantDashboardPage />} />
-        <Route path="orders" element={<TenantOrdersPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="settings" element={<TenantSettingsPage />} />
-        <Route path="users" element={<TenantUsersPage />} />
-        <Route path="locations" element={<TenantLocationsPage />} />
-        <Route path="products" element={<TenantProductsPage />} />
-        <Route path="machines" element={<TenantMachinesPage />} />
-        <Route path="slots" element={<TenantSlotsPage />} />
+      <Route element={<ProtectedRoute allowedRoles={['TENANT_ADMIN']} />} >
+        <Route path="/tenant-admin" element={<TenantAdminLayout />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<TenantDashboardPage />} />
+          <Route path="orders" element={<TenantOrdersPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="settings" element={<TenantSettingsPage />} />
+          <Route path="users" element={<TenantUsersPage />} />
+          <Route path="locations" element={<TenantLocationsPage />} />
+          <Route path="products" element={<TenantProductsPage />} />
+          <Route path="machines" element={<TenantMachinesPage />} />
+          <Route path="slots" element={<TenantSlotsPage />} />
+        </Route>
       </Route>
 
       {/* KIOSK CUSTOMER */}
