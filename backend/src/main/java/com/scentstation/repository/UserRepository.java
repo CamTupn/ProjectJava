@@ -10,8 +10,10 @@ import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
+    @EntityGraph(attributePaths = {"tenant", "roles"})
     Optional<User> findByUsername(String username);
 
+    @EntityGraph(attributePaths = {"tenant", "roles"})
     Optional<User> findByEmail(String email);
 
     boolean existsByUsername(String username);
@@ -20,9 +22,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmailAndIdNot(String email, Long id);
 
+    @Override
     @EntityGraph(attributePaths = {"tenant", "roles"})
     List<User> findAll();
 
+    @Override
     @EntityGraph(attributePaths = {"tenant", "roles"})
     Optional<User> findById(Long id);
 
@@ -30,5 +34,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findAllByTenant_Id(Long tenantId);
 
     @EntityGraph(attributePaths = {"tenant", "roles"})
-    Optional<User> findByIdAndTenant_Id(Long id, Long tenantId);
+    Optional<User> findByIdAndTenant_Id(
+            Long id,
+            Long tenantId
+    );
 }

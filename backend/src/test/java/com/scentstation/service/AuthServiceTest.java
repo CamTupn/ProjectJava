@@ -48,6 +48,7 @@ class AuthServiceTest {
         Tenant tenant = new Tenant();
         tenant.setId(1L);
         tenant.setCode("SCENT-DEMO");
+        tenant.setStatus("ACTIVE");
 
         Role role = new Role();
         role.setId(2L);
