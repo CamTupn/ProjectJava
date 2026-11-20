@@ -1,6 +1,8 @@
 package com.scentstation.controller;
 
 import com.scentstation.service.JwtService;
+import com.scentstation.repository.UserRepository;
+
 
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +22,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(AuthorizationTestController.class)
 @Import(AuthorizationTestControllerTest.MethodSecurityTestConfig.class)
 class AuthorizationTestControllerTest {
+
+    @MockitoBean
+    private UserRepository userRepository;
 
     @Autowired
     private MockMvc mockMvc;

@@ -49,6 +49,13 @@ public class AuthService {
                     "Account is not active"
             );
         }
+
+        if (user.getTenant() != null
+            && !"ACTIVE".equals(user.getTenant().getStatus())) {
+                throw new IllegalArgumentException(
+                        "Account is not active"
+                );
+        }
         // 4. Kiểm tra mật khẩu bằng BCrypt
         if (!passwordEncoder.matches(
                 request.getPassword(),
