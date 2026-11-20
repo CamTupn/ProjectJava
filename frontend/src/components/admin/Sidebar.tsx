@@ -1,4 +1,6 @@
 import { NavLink } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../auth/AuthContext'
 import {
   Wind,
   LayoutDashboard,
@@ -34,6 +36,13 @@ const navClass = (active: boolean) =>
   }`
 
 export default function Sidebar() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
   return (
     <aside className="flex h-full w-64 flex-col overflow-hidden bg-[#171D36] text-white">
 
@@ -134,9 +143,7 @@ export default function Sidebar() {
 
         <button
           type="button"
-          onClick={() =>
-            window.alert('Chức năng đăng xuất sẽ được tích hợp sau.')
-          }
+          onClick={handleLogout}
           className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-300"
         >
           <LogOut size={19} />
