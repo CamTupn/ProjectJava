@@ -5,7 +5,12 @@ import {
   type ReactNode,
 } from 'react'
 
-export type UserRole = 'SUPER_ADMIN' | 'TENANT_ADMIN'
+export type UserRole =
+  | 'PLATFORM_SUPER_ADMIN'
+  | 'BRAND_ADMIN'
+  | 'OPERATIONS_MANAGER'
+  | 'TECHNICIAN'
+  | 'INVENTORY_STAFF'
 
 export interface AuthUser {
   id: string
@@ -23,68 +28,97 @@ interface AuthContextType {
 
 const STORAGE_KEY = 'scentstation_demo_auth'
 
-const demoAccounts = [
+interface DemoAccount extends AuthUser {
+  password: string
+}
+
+export const demoAccounts: DemoAccount[] = [
   {
     id: '1',
-    name: 'Super Administrator',
-    email: 'admin@scentstation.com',
+    name: 'Platform Administrator',
+    email: 'platform@scentstation.com',
     password: 'Admin@123',
-    role: 'SUPER_ADMIN' as UserRole,
+    role: 'PLATFORM_SUPER_ADMIN',
   },
   {
     id: '2',
-    name: 'Tenant Administrator',
-    email: 'tenant@scentstation.com',
-    password: 'Tenant@123',
-    role: 'TENANT_ADMIN' as UserRole,
+    name: 'Brand Administrator',
+    email: 'admin@scentstation.com',
+    password: 'Brand@123',
+    role: 'BRAND_ADMIN',
+  },
+  {
+    id: '3',
+    name: 'Operations Manager',
+    email: 'operations@scentstation.com',
+    password: 'Operations@123',
+    role: 'OPERATIONS_MANAGER',
+  },
+  {
+    id: '4',
+    name: 'Technician',
+    email: 'tech@scentstation.com',
+    password: 'Tech@123',
+    role: 'TECHNICIAN',
+  },
+  {
+    id: '5',
+    name: 'Inventory Staff',
+    email: 'stock@scentstation.com',
+    password: 'Inventory@123',
+    role: 'INVENTORY_STAFF',
   },
 ]
 
-const AuthContext = createContext<AuthContextType | undefined>(
-  undefined
-)
+export function getRoleHome(role: UserRole): string {
+  switch (role) {
+    case 'PLATFORM_SUPER_ADMIN':
+      return '/admin'
+    case 'BRAND_ADMIN':
+      return '/tenant-admin/dashboard'
+    case 'OPERATIONS_MANAGER':
+      return '/operations/dashboard'
+    case 'TECHNICIAN':
+      return '/technician/dashboard'
+    case 'INVENTORY_STAFF':
+      return '/inventory/dashboard'
+  }
+}
 
 function getStoredUser(): AuthUser | null {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-
     if (!stored) return null
 
-    const parsed: unknown = JSON.parse(stored)
+    const data: unknown = JSON.parse(stored)
 
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      !('role' in parsed) ||
-      !('email' in parsed) ||
-      !('id' in parsed) ||
-      !('name' in parsed)
-    ) {
-      return null
-    }
+    if (!data || typeof data !== 'object') return null
 
-    const data = parsed as Record<string, unknown>
+    const record = data as Record<string, unknown>
 
-    if (
-      typeof data.id !== 'string' ||
-      typeof data.name !== 'string' ||
-      typeof data.email !== 'string' ||
-      (data.role !== 'SUPER_ADMIN' &&
-        data.role !== 'TENANT_ADMIN')
-    ) {
-      return null
-    }
+    const account = demoAccounts.find(
+      (item) =>
+        item.id === record.id &&
+        item.email === record.email &&
+        item.role === record.role
+    )
+
+    if (!account) return null
 
     return {
-      id: data.id,
-      name: data.name,
-      email: data.email,
-      role: data.role,
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      role: account.role,
     }
   } catch {
     return null
   }
 }
+
+const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+)
 
 export function AuthProvider({
   children,
@@ -95,7 +129,7 @@ export function AuthProvider({
     getStoredUser
   )
 
-  const login = (email: string, password: string) => {
+  const login = (email: string, password: string): boolean => {
     const account = demoAccounts.find(
       (item) =>
         item.email.toLowerCase() ===
@@ -118,7 +152,6 @@ export function AuthProvider({
     )
 
     setUser(authUser)
-
     return true
   }
 

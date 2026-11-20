@@ -1,8 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
-import { useAuth } from './auth/AuthContext'
+import {
+  getRoleHome,
+  useAuth,
+} from './auth/AuthContext'
 import ProtectedRoute from './auth/ProtectedRoute'
+
 import LoginPage from './pages/auth/LoginPage'
+import StaffLayout from './layouts/StaffLayout'
+import StaffPage from './pages/staff/StaffPage'
 
 import AdminLayout from './layouts/AdminLayout'
 import TenantAdminLayout from './layouts/TenantAdminLayout'
@@ -38,17 +44,9 @@ import ResultPage from './pages/kiosk/ResultPage'
 function HomeRedirect() {
   const { user } = useAuth()
 
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
-
   return (
     <Navigate
-      to={
-        user.role === 'SUPER_ADMIN'
-          ? '/admin'
-          : '/tenant-admin/dashboard'
-      }
+      to={user ? getRoleHome(user.role) : '/login'}
       replace
     />
   )
@@ -60,8 +58,8 @@ function App() {
       <Route path="/" element={<HomeRedirect />} />
       <Route path="/login" element={<LoginPage />} />
 
-      {/* SUPER ADMIN */}
-      <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN']} />}>
+      {/*  PLATFORM SUPER ADMIN */}
+      <Route element={<ProtectedRoute allowedRoles={['PLATFORM_SUPER_ADMIN']} />}>
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="tenants" element={<TenantsPage />} />
@@ -76,7 +74,7 @@ function App() {
       </Route>
 
       {/* TENANT ADMIN */}
-      <Route element={<ProtectedRoute allowedRoles={['TENANT_ADMIN']} />} >
+      <Route element={<ProtectedRoute allowedRoles={['BRAND_ADMIN']} />} >
         <Route path="/tenant-admin" element={<TenantAdminLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<TenantDashboardPage />} />
@@ -88,6 +86,36 @@ function App() {
           <Route path="products" element={<TenantProductsPage />} />
           <Route path="machines" element={<TenantMachinesPage />} />
           <Route path="slots" element={<TenantSlotsPage />} />
+        </Route>
+      </Route>
+
+       {/* OPERATIONS MANAGER */}
+      <Route element={ <ProtectedRoute allowedRoles={['OPERATIONS_MANAGER']}/>} >
+        <Route path="/operations" element={<StaffLayout role="OPERATIONS_MANAGER" />} >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={ <StaffPage role="OPERATIONS_MANAGER" section="dashboard" /> } />
+          <Route path="machines" element={ <StaffPage role="OPERATIONS_MANAGER" section="machines" /> } />
+          <Route path="orders" element={ <StaffPage role="OPERATIONS_MANAGER" section="orders" /> } />
+        </Route>
+      </Route>
+
+      {/* TECHNICIAN */}
+      <Route element={ <ProtectedRoute allowedRoles={['TECHNICIAN']} />} >
+        <Route path="/technician" element={<StaffLayout role="TECHNICIAN" />} >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={ <StaffPage role="TECHNICIAN" section="dashboard" />} />
+          <Route  path="machines" element={ <StaffPage role="TECHNICIAN" section="machines" />} />
+          <Route path="maintenance" element={ <StaffPage role="TECHNICIAN" section="maintenance" />} />
+        </Route>
+      </Route>
+
+      {/* INVENTORY STAFF */}
+      <Route element={ <ProtectedRoute allowedRoles={['INVENTORY_STAFF']} /> } >
+        <Route path="/inventory" element={<StaffLayout role="INVENTORY_STAFF" />} >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={ <StaffPage role="INVENTORY_STAFF" section="dashboard" />}/>
+          <Route path="stock" element={ <StaffPage role="INVENTORY_STAFF" section="stock"/>} />
+          <Route path="refills" element={ <StaffPage role="INVENTORY_STAFF" section="refills" /> } />
         </Route>
       </Route>
 

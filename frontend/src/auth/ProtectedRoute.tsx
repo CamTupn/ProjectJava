@@ -1,5 +1,14 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { useAuth, type UserRole } from './AuthContext'
+import {
+  Navigate,
+  Outlet,
+  useLocation,
+} from 'react-router-dom'
+
+import {
+  getRoleHome,
+  useAuth,
+  type UserRole,
+} from './AuthContext'
 
 interface ProtectedRouteProps {
   allowedRoles: UserRole[]
@@ -24,11 +33,7 @@ export default function ProtectedRoute({
   if (!allowedRoles.includes(user.role)) {
     return (
       <Navigate
-        to={
-          user.role === 'SUPER_ADMIN'
-            ? '/admin'
-            : '/tenant-admin/dashboard'
-        }
+        to={getRoleHome(user.role)}
         replace
       />
     )
