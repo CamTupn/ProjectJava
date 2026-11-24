@@ -1,0 +1,46 @@
+{
+  "info": {
+    "name": "ScentStation - TASK-018 Location & Product Management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "CRUD, validation and soft-delete checks. Use a valid JWT. PLATFORM_SUPER_ADMIN must supply tenantId in create bodies; BRAND_ADMIN must omit tenantId."
+  },
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{jwtToken}}", "type": "string" }] },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "jwtToken", "value": "" },
+    { "key": "locationId", "value": "" },
+    { "key": "locationInUseId", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "productInUseId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Location Management",
+      "item": [
+        { "name": "List locations", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/locations?status=ACTIVE" } },
+        { "name": "Create location", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"District 1 Store\",\n  \"address\": \"123 Nguyen Hue, District 1, Ho Chi Minh City\",\n  \"description\": \"Postman test location\"\n}" }, "url": "{{baseUrl}}/api/v1/locations" }, "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Created', () => pm.response.to.have.status(201));", "if (pm.response.code === 201) { const b = pm.response.json(); pm.collectionVariables.set('locationId', b.id || (b.data && b.data.id)); }"] } }] },
+        { "name": "Get location by ID", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/locations/{{locationId}}" } },
+        { "name": "Update location", "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"District 1 Store Updated\",\n  \"address\": \"125 Nguyen Hue, District 1, Ho Chi Minh City\",\n  \"description\": \"Updated by Postman\"\n}" }, "url": "{{baseUrl}}/api/v1/locations/{{locationId}}" } },
+        { "name": "Soft-delete location", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/locations/{{locationId}}" } },
+        { "name": "Verify location is INACTIVE", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/locations/{{locationId}}" } },
+        { "name": "Missing location ID (expect 404)", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/locations/999999999" } },
+        { "name": "Delete location assigned to Machine (expect 409)", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/locations/{{locationInUseId}}" } }
+      ]
+    },
+    {
+      "name": "Product Management",
+      "item": [
+        { "name": "List products", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/products?status=ACTIVE" } },
+        { "name": "Create product", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"sku\": \"POSTMAN-ROSE-001\",\n  \"name\": \"Rose Test Perfume\",\n  \"description\": \"Postman test product\",\n  \"fragranceNotes\": \"Rose, musk, vanilla\",\n  \"imageUrl\": \"https://example.com/rose.jpg\",\n  \"price\": 150000.00,\n  \"volumePerSprayMl\": 0.10\n}" }, "url": "{{baseUrl}}/api/v1/products" }, "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Created', () => pm.response.to.have.status(201));", "if (pm.response.code === 201) { const b = pm.response.json(); pm.collectionVariables.set('productId', b.id || (b.data && b.data.id)); }"] } }] },
+        { "name": "Get product by ID", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/products/{{productId}}" } },
+        { "name": "Update product", "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Rose Test Perfume Updated\",\n  \"description\": \"Updated description\",\n  \"fragranceNotes\": \"Rose, musk\",\n  \"imageUrl\": \"https://example.com/rose-updated.jpg\",\n  \"price\": 160000.00,\n  \"volumePerSprayMl\": 0.12\n}" }, "url": "{{baseUrl}}/api/v1/products/{{productId}}" } },
+        { "name": "Soft-delete product", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/products/{{productId}}" } },
+        { "name": "Verify product is INACTIVE", "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/products/{{productId}}" } },
+        { "name": "Duplicate SKU (expect 409)", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"sku\": \"EXISTING-SKU\",\n  \"name\": \"Duplicate SKU test\",\n  \"price\": 1000,\n  \"volumePerSprayMl\": 0.10\n}" }, "url": "{{baseUrl}}/api/v1/products" } },
+        { "name": "Invalid price (expect 400)", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"sku\": \"INVALID-PRICE\",\n  \"name\": \"Invalid price test\",\n  \"price\": -1,\n  \"volumePerSprayMl\": 0.10\n}" }, "url": "{{baseUrl}}/api/v1/products" } },
+        { "name": "Invalid spray volume (expect 400)", "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"sku\": \"INVALID-VOLUME\",\n  \"name\": \"Invalid volume test\",\n  \"price\": 1000,\n  \"volumePerSprayMl\": 0\n}" }, "url": "{{baseUrl}}/api/v1/products" } },
+        { "name": "Delete product assigned to Machine Slot (expect 409)", "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/products/{{productInUseId}}" } }
+      ]
+    }
+  ]
+}

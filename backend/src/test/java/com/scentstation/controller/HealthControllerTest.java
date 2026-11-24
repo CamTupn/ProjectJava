@@ -1,6 +1,8 @@
 package com.scentstation.controller;
 
 import com.scentstation.service.JwtService;
+import com.scentstation.repository.UserRepository;
+
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +20,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(HealthController.class)
 @AutoConfigureMockMvc(addFilters = false)
 class HealthControllerTest {
+
+    @MockitoBean
+    private UserRepository userRepository;
     
     @Autowired
     private MockMvc mockMvc;
