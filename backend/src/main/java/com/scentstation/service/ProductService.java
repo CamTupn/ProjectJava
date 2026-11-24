@@ -34,7 +34,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<ProductResponse> getAll(String status, String name, Long requestedTenantId) {
         CurrentUserPrincipal user = currentUsers.getCurrentUser();
-        requireRole(user);
+        requireReadRole(user);
         Long tenantId = resolveReadTenant(user, requestedTenantId);
         return products.search(tenantId, normalize(status), blankToNull(name))
                 .stream().map(mapper::toResponse).toList();
@@ -43,13 +43,13 @@ public class ProductService {
     @Transactional(readOnly = true)
     public ProductResponse getById(Long id) {
         CurrentUserPrincipal user = currentUsers.getCurrentUser();
-        requireRole(user);
+        requireReadRole(user);
         return mapper.toResponse(findAccessible(id, user));
     }
 
     public ProductResponse create(CreateProductRequest request) {
         CurrentUserPrincipal user = currentUsers.getCurrentUser();
-        requireRole(user);
+        requireManageRole(user);
         Long tenantId = resolveCreateTenant(user, request.tenantId());
         ensureActiveTenant(tenantId);
         String sku = request.sku().trim();
@@ -74,7 +74,7 @@ public class ProductService {
 
     public ProductResponse update(Long id, UpdateProductRequest request) {
         CurrentUserPrincipal user = currentUsers.getCurrentUser();
-        requireRole(user);
+        requireManageRole(user);
         Product product = findAccessible(id, user);
         product.setName(request.name().trim());
         product.setDescription(request.description());
@@ -87,9 +87,9 @@ public class ProductService {
 
     public void delete(Long id) {
         CurrentUserPrincipal user = currentUsers.getCurrentUser();
-        requireRole(user);
+        requireManageRole(user);
         Product product = findAccessible(id, user);
-        if (products.isUsedByMachineSlot(id))
+        if (products.countMachineSlotsByProductId(id) > 0)
             throw new ResourceConflictException("Product cannot be deactivated while assigned to a Machine Slot");
         // Orders retain their product snapshot and foreign-key reference; soft-delete keeps history intact.
         product.setStatus("INACTIVE");
@@ -125,9 +125,17 @@ public class ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant not found with ID: " + tenantId));
         if (!"ACTIVE".equals(tenant.getStatus())) throw new ResourceConflictException("Cannot manage resources for an inactive tenant");
     }
-    private void requireRole(CurrentUserPrincipal user) {
-        if (!user.isPlatformSuperAdmin() && !user.hasRole("BRAND_ADMIN"))
+    private void requireReadRole(CurrentUserPrincipal user) {
+        if (!user.isPlatformSuperAdmin() && !user.hasRole("BRAND_ADMIN") && !user.hasRole("OPERATIONS_MANAGER"))
             throw new org.springframework.security.access.AccessDeniedException("Role is not permitted to manage products");
+    }
+    private void requireManageRole(CurrentUserPrincipal user) {
+        if (!user.isPlatformSuperAdmin()
+                && !user.hasRole("BRAND_ADMIN")) {
+
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Role is not permitted to manage products");
+        }   
     }
     private String normalize(String value) { return value == null || value.isBlank() ? null : value.trim().toUpperCase(); }
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }

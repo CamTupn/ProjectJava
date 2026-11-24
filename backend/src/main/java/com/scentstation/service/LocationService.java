@@ -74,7 +74,7 @@ public class LocationService {
         CurrentUserPrincipal user = currentUsers.getCurrentUser();
         requireManageRole(user);
         Location location = findAccessible(id, user);
-        if (locations.isUsedByMachine(id)) {
+        if (locations.countMachinesByLocationId(id) > 0) {
             throw new ResourceConflictException("Location cannot be deactivated while a Machine is assigned to it");
         }
         location.setStatus("INACTIVE");
@@ -115,7 +115,7 @@ public class LocationService {
         if (!"ACTIVE".equals(tenant.getStatus())) throw new ResourceConflictException("Cannot manage resources for an inactive tenant");
     }
     private void requireReadRole(CurrentUserPrincipal user) {
-        if (!user.isPlatformSuperAdmin() && !user.hasRole("BRAND_ADMIN"))
+        if (!user.isPlatformSuperAdmin() && !user.hasRole("BRAND_ADMIN") && !user.hasRole("OPERATIONS_MANAGER"))
             throw new org.springframework.security.access.AccessDeniedException("Role is not permitted to read locations");
     }
     private void requireManageRole(CurrentUserPrincipal user) {

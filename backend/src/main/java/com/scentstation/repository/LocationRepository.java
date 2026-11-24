@@ -18,6 +18,13 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
 
     Optional<Location> findByIdAndTenantId(Long id, Long tenantId);
 
-    @Query(value = "SELECT EXISTS(SELECT 1 FROM machines WHERE location_id = :locationId)", nativeQuery = true)
-    boolean isUsedByMachine(@Param("locationId") Long locationId);
+    @Query(
+        value = """
+            SELECT COUNT(*)
+            FROM machines
+            WHERE location_id = :locationId
+            """,
+        nativeQuery = true
+    )
+    long countMachinesByLocationId(@Param("locationId") Long locationId);
 }

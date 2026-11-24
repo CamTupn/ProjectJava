@@ -19,8 +19,17 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional<Product> findByIdAndTenantId(Long id, Long tenantId);
     boolean existsByTenantIdAndSku(Long tenantId, String sku);
 
-    @Query(value = "SELECT EXISTS(SELECT 1 FROM machine_slots WHERE product_id = :productId)", nativeQuery = true)
-    boolean isUsedByMachineSlot(@Param("productId") Long productId);
+    @Query(
+        value = """
+            SELECT COUNT(*)
+            FROM machine_slots
+            WHERE product_id = :productId
+            """,
+        nativeQuery = true
+    )
+    long countMachineSlotsByProductId(
+        @Param("productId") Long productId
+    );
 
     @Query(value = "SELECT EXISTS(SELECT 1 FROM orders WHERE product_id = :productId)", nativeQuery = true)
     boolean hasOrderHistory(@Param("productId") Long productId);
