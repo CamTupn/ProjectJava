@@ -1,13 +1,13 @@
 [api-specification.md](https://github.com/user-attachments/files/33478238/api-specification.md)
 # ScentStation — REST API Specification
 
-**Document:** API Specification  
-**Version:** 0.1  
+**Document:** API Specification
+**Version:** 0.1
 **Status:** Draft for Review; not yet approved
-**API Prefix:** `/api/v1`  
-**Format:** HTTPS + REST/JSON  
-**Backend:** Java 21 + Spring Boot 3.5.x  
-**Database:** MySQL 8.4  
+**API Prefix:** `/api/v1`
+**Format:** HTTPS + REST/JSON
+**Backend:** Java 21 + Spring Boot 3.5.x
+**Database:** MySQL 8.4
 **Related tasks:** TASK-002, TASK-003, TASK-004, TASK-006
 
 > This document is the API contract draft for TASK-005. Endpoint names and payloads are designed from the current SRS and system architecture. The final field names, identifiers and enum values must be reconciled with TASK-004 (ERD/Data Dictionary) before implementation.
@@ -194,285 +194,30 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 
 ---
 
-# 4. Authentication Module
+# 4. Authentication Module — implemented Sprint 4
 
 ## 4.1 Login
 
-### `POST /api/v1/auth/login`
-
-**Access:** Public
-
-**Purpose:** Authenticate an administrative user.
-
-### Request
-
+`POST /api/v1/auth/login` — public. JSON request:
 ```json
-{
-  "email": "admin@scentstation.local",
-  "password": "********"
-}
+{"usernameOrEmail":"brandadmin","password":"<password>"}
 ```
-
-### Validation
-
-- `email`: required, valid email format.
-- `password`: required.
-- Account must be active.
-- Invalid credentials must not reveal whether an account exists.
-
-### Response `200 OK`
-
+Both fields nonblank. Username or email lookup, ACTIVE user/tenant, BCrypt matches. 200:
 ```json
-{
-  "success": true,
-  "data": {
-    "accessToken": "<jwt>",
-    "refreshToken": "<refresh-token>",
-    "expiresIn": 3600,
-    "user": {
-      "id": "usr_001",
-      "email": "admin@scentstation.local",
-      "roles": ["PLATFORM_SUPER_ADMIN"],
-      "tenantIds": []
-    }
-  },
-  "message": "Login successful"
-}
+{"success":true,"message":"Login successful","data":{"userId":2,"username":"brandadmin","email":"admin@example.com","fullName":"Brand Admin","tenantCode":"DEMO","roles":["BRAND_ADMIN"],"accessToken":"<jwt>"}}
 ```
+Invalid credentials, inactive account/tenant or invalid input: 400 in current implementation. Missing/invalid JWT on protected API: 401; insufficient role: 403. No refreshToken/expiresIn in response. Refresh/logout/me endpoints are not implemented by AuthController; previous designs are future scope. Public registration is removed; anonymous POST register returns 401 as tested.
 
-### Errors
+# 5. Tenant Management — implemented Sprint 4
 
-- `400 VALIDATION_ERROR`
-- `401 INVALID_CREDENTIALS`
-- `403 ACCOUNT_DISABLED`
-- `423 ACCOUNT_LOCKED`
-- `500 INTERNAL_ERROR`
+| Method | Route | Access | Success |
+|---|---|---|---|
+| GET | /api/v1/tenants | Platform global / Brand own | 200 array |
+| GET | /api/v1/tenants/{id} | Platform global / Brand own | 200 DTO |
+| POST | /api/v1/tenants | Platform only | 201 DTO |
+| PUT | /api/v1/tenants/{id} | Platform global / Brand own | 200 DTO |
 
----
-
-## 4.2 Refresh Token
-
-### `POST /api/v1/auth/refresh`
-
-**Access:** Refresh token
-
-### Request
-
-```json
-{
-  "refreshToken": "<refresh-token>"
-}
-```
-
-### Response `200 OK`
-
-```json
-{
-  "success": true,
-  "data": {
-    "accessToken": "<new-jwt>",
-    "expiresIn": 3600
-  }
-}
-```
-
-### Errors
-
-- `400 VALIDATION_ERROR`
-- `401 INVALID_REFRESH_TOKEN`
-- `401 REFRESH_TOKEN_EXPIRED`
-
----
-
-## 4.3 Logout
-
-### `POST /api/v1/auth/logout`
-
-**Access:** Authenticated
-
-### Request
-
-```json
-{
-  "refreshToken": "<refresh-token>"
-}
-```
-
-### Response `204 No Content`
-
-### Errors
-
-- `401 UNAUTHORIZED`
-- `404 SESSION_NOT_FOUND`
-
----
-
-## 4.4 Current User
-
-### `GET /api/v1/auth/me`
-
-**Access:** Authenticated
-
-### Response `200 OK`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "usr_001",
-    "email": "admin@scentstation.local",
-    "roles": ["PLATFORM_SUPER_ADMIN"],
-    "tenantIds": []
-  }
-}
-```
-
----
-
-# 5. Tenant Management
-
-## 5.1 List Tenants
-
-### `GET /api/v1/tenants`
-
-**Access:** `PLATFORM_SUPER_ADMIN`
-
-### Query parameters
-
-```text
-?page=0&size=20&status=ACTIVE
-```
-
-### Response `200 OK`
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "id": "tenant_001",
-        "name": "Scent Tenant",
-        "description": "Example brand",
-        "status": "ACTIVE"
-      }
-    ],
-    "page": 0,
-    "size": 20,
-    "totalElements": 1,
-    "totalPages": 1
-  }
-}
-```
-
-### Errors
-
-- `401 UNAUTHORIZED`
-- `403 FORBIDDEN`
-
----
-
-## 5.2 Create Tenant
-
-### `POST /api/v1/tenants`
-
-**Access:** `PLATFORM_SUPER_ADMIN`
-
-### Request
-
-```json
-{
-  "name": "Scent Tenant",
-  "description": "Example tenant",
-  "status": "ACTIVE"
-}
-```
-
-### Validation
-
-- `name`: required, non-blank.
-- Name/identifier must be unique according to the finalized ERD policy.
-- `status`: `ACTIVE` or `INACTIVE`.
-
-### Response `201 Created`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "tenant_001",
-    "name": "Scent Tenant",
-    "description": "Example tenant",
-    "status": "ACTIVE"
-  },
-  "message": "Brand created successfully"
-}
-```
-
-### Errors
-
-- `400 VALIDATION_ERROR`
-- `409 TENANT_ALREADY_EXISTS`
-- `403 FORBIDDEN`
-
----
-
-## 5.3 Get Tenant
-
-### `GET /api/v1/tenants/{tenantId}`
-
-**Access:** `PLATFORM_SUPER_ADMIN`; scoped users may access only assigned tenants.
-
-### Response `200 OK`
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": "tenant_001",
-    "name": "Scent Tenant",
-    "description": "Example tenant",
-    "status": "ACTIVE"
-  }
-}
-```
-
-### Errors
-
-- `401 UNAUTHORIZED`
-- `403 TENANT_ACCESS_DENIED`
-- `404 TENANT_NOT_FOUND`
-
----
-
-## 5.4 Update Tenant
-
-### `PATCH /api/v1/tenants/{tenantId}`
-
-**Access:** `PLATFORM_SUPER_ADMIN`
-
-### Request
-
-```json
-{
-  "name": "Updated Brand",
-  "description": "Updated description",
-  "status": "ACTIVE"
-}
-```
-
-### Response `200 OK`
-
-Returns the updated brand.
-
-### Errors
-
-- `400 VALIDATION_ERROR`
-- `403 FORBIDDEN`
-- `404 TENANT_NOT_FOUND`
-- `409 TENANT_ALREADY_EXISTS`
-
----
+POST and PUT body: `{"name":"Demo Brand","code":"DEMO"}`. Response raw TenantResponse: id (Long), name, code, status, createdAt, updatedAt. No pagination, description or status update in these endpoints. Errors 400/401/403/404/409 according to validation, auth, scope and duplicate code. See rules below.
 
 # 6. Product Module
 
@@ -2192,7 +1937,7 @@ Returns `notificationId`, `type`, `title`, `message`, `referenceType`, `referenc
 
 ## 28.11 Tenant and location APIs
 
-Tenant management endpoints use `/api/v1/tenants` and fields matching `tenants` (`name`, `code`, `status`). Tenant creation/update is restricted to `PLATFORM_SUPER_ADMIN`.
+Tenant management endpoints use `/api/v1/tenants` and fields matching `tenants` (`name`, `code`, `status`). Tenant creation is restricted to `PLATFORM_SUPER_ADMIN`; update also permits Brand Admin in own tenant.
 
 ### `GET /api/v1/locations`
 
@@ -2216,35 +1961,21 @@ Returns `locationId`, `tenantId`, `name`, `address`, `description`, `status`, `c
 
 **Errors:** `401 UNAUTHORIZED`, `403 TENANT_ACCESS_DENIED`, `404 LOCATION_NOT_FOUND`, `400 VALIDATION_ERROR`.
 
-## 28.12 User and role management
+## 28.12 User and role management — implemented Sprint 4
 
-### `GET /api/v1/users`
+| Method | Route | Access | Success |
+|---|---|---|---|
+| GET | /api/v1/users | Platform global / Brand own | 200 array |
+| GET | /api/v1/users/{id} | Platform global / Brand own | 200 DTO |
+| POST | /api/v1/users | Platform / Brand scoped | 201 DTO |
+| PUT | /api/v1/users/{id} | Platform / Brand scoped | 200 DTO |
+| PATCH | /api/v1/users/{id}/status?status=LOCKED | Platform / Brand scoped | 200 DTO |
 
-**Access:** `PLATFORM_SUPER_ADMIN`; tenant administrators may list users only if the team authorizes this capability.
-
-**Query:** `?tenantId=tenant_001&status=ACTIVE&page=0&size=20`.
-
-Returns user profile fields only: `userId`, `tenantId` (nullable for platform-level users), `username`, `email`, `fullName`, `status`, `roles`, `createdAt`, `updatedAt`. Never return `passwordHash`.
-
-### `POST /api/v1/users`
-
-**Access:** `PLATFORM_SUPER_ADMIN` (tenant-scoped user provisioning may be delegated by explicit policy).
-
-**Request:** `{"tenantId":"tenant_001","username":"ops01","email":"ops@example.local","fullName":"Operations User","temporaryPassword":"<one-time-secret>","roleCodes":["OPERATIONS_MANAGER"]}`.
-
-Validate email/username uniqueness, role codes against `roles.code`, tenant scope, and password policy. Store only a secure password hash; never log the temporary password.
-
-### `PATCH /api/v1/users/{userId}`
-
-**Access:** `PLATFORM_SUPER_ADMIN`; authorized tenant admin only if policy allows.
-
-May update `fullName`, `email`, `status`, and role assignments. Role changes must be audited. Never accept a client-supplied password hash.
-
-### `GET /api/v1/roles`
-
-**Access:** `PLATFORM_SUPER_ADMIN` or authenticated users when needed to populate permitted role choices. Returns role `code`, `name`, and `description` from `roles`.
-
-**Note:** `KIOSK_DEVICE`, `PAYMENT_PROVIDER`, and `PUBLIC_KIOSK` describe integration/session principals in this API draft, not rows in `roles` unless TASK-004 is changed to include them. The current `roles` table contains the five human/platform role codes listed in Section 2.
+POST example (Platform):
+```json
+{"tenantId":1,"username":"ops01","email":"ops@example.com","fullName":"Operations User","password":"<test-password>","roleCode":"OPERATIONS_MANAGER"}
+```
+PUT body: `{"fullName":"Updated User","email":"updated@example.com"}`. Response raw UserResponse: id, username, email, fullName, status, tenantId, tenantCode, roles (array), createdAt, updatedAt. No passwordHash. No pagination or role update endpoint. GET /roles is planned, not implemented by supplied controllers.
 
 ## 28.13 Device command acknowledgement and event processing
 
@@ -2411,3 +2142,16 @@ Platform Super Admin creates a Product (tenantId is required for this role):
 - Tạo máy luôn OFFLINE; yêu cầu ONLINE bị từ chối 400. Operational mặc định ACTIVE; hai trạng thái độc lập.
 - Tenant admin không được tạo máy cho tenant khác (403); truy vấn máy/tenant khác trả 404. Platform phải cung cấp tenantId khi tạo; tenant phải ACTIVE. Location tùy chọn, nếu có phải ACTIVE và cùng tenant. Platform chọn location sai tenant: 400; tenant user chọn location ngoài scope: 404.
 - machineCode, serialNumber, deviceIdentity duy nhất toàn hệ thống; trùng hoặc vi phạm ràng buộc khi saveAndFlush trả 409. PUT chỉ sửa trường khác null, không đổi tenant hoặc trạng thái; locationId null không gỡ location. DELETE chỉ đặt DISABLED, không xóa bản ghi.
+
+
+## TASK-021 — Trạng thái xác minh contract Sprint 4
+
+Mốc cuối TASK-021 bổ sung POST tenants/users và bỏ public register. Regression 341/341 PASS gồm 39 integration tests. Đối chiếu từng API với các test được liệt kê trong test-report.md; kết quả không thay thế bằng chứng HTTP/Postman cho toàn bộ contract.
+
+## TASK-021 — Chính sách cấp tài khoản (27/11/2026)
+
+Thay đổi phạm vi TASK-014/015: không tự đăng ký công khai; `RegisterRequest` đã xóa, `/api/v1/auth/register` không có controller và không còn public. Platform Super Admin được khởi tạo ngoài API cấp tài khoản. Platform Super Admin tạo tenant và cấp Brand Admin hoặc nhân viên cho tenant ACTIVE; Brand Admin chỉ cấp Operations Manager, Technician, Inventory Staff trong tenant của mình. Không role nào được tạo Platform Super Admin qua API. Login vẫn public, JWT bắt buộc cho API quản lý. Đây là thay đổi yêu cầu cần được nhóm xác nhận khi nghiệm thu, không phải hoàn thành Register theo issue cũ.
+
+- `POST /api/v1/tenants`: name bắt buộc tối đa 150, code bắt buộc tối đa 50, chỉ chữ ASCII, số, `_`, `-`; trim name, uppercase code (Locale.ROOT); code duy nhất; ACTIVE mặc định; saveAndFlush, lỗi constraint 409.
+- `POST /api/v1/users`: username 3–100 ký tự ASCII chữ/số/`_.-`, email hợp lệ tối đa 255, fullName tối đa 150, password 8–72 ký tự và tối đa 72 byte UTF-8, roleCode bắt buộc tối đa 50. Username/email trim và lowercase, role uppercase, fullName trim. Platform phải truyền tenantId; Brand Admin lấy tenant từ principal, tenantId khác bị 403. Tenant không tồn tại 404, INACTIVE 409. Username/email trùng 409; role không hợp lệ 400, role hợp lệ nhưng thiếu trong DB 404. BCrypt encode trước saveAndFlush; gán đúng một role từ DB, ACTIVE mặc định; lỗi constraint 409. Response không có passwordHash.
+- GET user/tenant: Platform toàn hệ thống, Brand Admin trong tenant; ngoài scope 404. PUT user chỉ fullName/email; PATCH status ACTIVE/LOCKED/INACTIVE; Brand Admin không sửa tài khoản quản trị, không tự khóa/vô hiệu hóa. PUT tenant cập nhật name/code, Brand Admin chỉ tenant mình. Không có API đổi role hay xóa tenant trong phạm vi này.

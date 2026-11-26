@@ -9,11 +9,17 @@ import com.scentstation.entity.User;
 import com.scentstation.exception.ResourceNotFoundException;
 import com.scentstation.mapper.UserMapper;
 import com.scentstation.repository.UserRepository;
+import com.scentstation.dto.request.CreateUserRequest;
+import com.scentstation.exception.ResourceConflictException;
+import com.scentstation.repository.TenantRepository;
+import com.scentstation.repository.RoleRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +30,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +44,15 @@ class UserServiceTest {
 
     @Mock
     private CurrentUserService currentUserService;
+
+    @Mock
+    private TenantRepository tenantRepository;
+
+    @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private UserService userService;
@@ -491,5 +507,363 @@ class UserServiceTest {
         request.setEmail(email);
 
         return request;
+    }
+
+    // =========================================
+    // CREATE USER TESTS
+    // =========================================
+
+    @Test
+    void superAdminShouldCreateBrandAdmin() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(1L, "BRAND_ADMIN");
+
+            mockSuccessfulUserCreation(tenantA, "BRAND_ADMIN");
+
+            userService.createUser(request);
+
+            ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+
+            verify(userRepository).saveAndFlush(captor.capture());
+
+            User savedUser = captor.getValue();
+
+            assertEquals("new_user", savedUser.getUsername());
+            assertEquals("new@example.com", savedUser.getEmail());
+            assertEquals("New User", savedUser.getFullName());
+            assertEquals("ACTIVE", savedUser.getStatus());
+            assertEquals(tenantA, savedUser.getTenant());
+            assertEquals("encoded-password", savedUser.getPasswordHash());
+
+            assertEquals(
+                            Set.of("BRAND_ADMIN"),
+                            savedUser.getRoles().stream()
+                                            .map(Role::getCode)
+                                            .collect(java.util.stream.Collectors.toSet()));
+
+            assertNotEquals(
+                            request.getPassword(),
+                            savedUser.getPasswordHash());
+
+            verify(passwordEncoder).encode(request.getPassword());
+    }
+
+    @Test
+    void brandAdminShouldCreateEmployeeInOwnTenant() {
+
+            mockCurrentUser(20L, 1L, "BRAND_ADMIN");
+
+            CreateUserRequest request = createUserRequest(null, "TECHNICIAN");
+
+            mockSuccessfulUserCreation(tenantA, "TECHNICIAN");
+
+            userService.createUser(request);
+
+            ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+
+            verify(userRepository).saveAndFlush(captor.capture());
+
+            assertEquals(
+                            1L,
+                            captor.getValue().getTenant().getId());
+    }
+
+    @Test
+    void brandAdminShouldNotCreateUserInAnotherTenant() {
+
+            mockCurrentUser(20L, 1L, "BRAND_ADMIN");
+
+            CreateUserRequest request = createUserRequest(2L, "TECHNICIAN");
+
+            assertThrows(
+                            AccessDeniedException.class,
+                            () -> userService.createUser(request));
+
+            verifyNoInteractions(tenantRepository);
+            verifyNoInteractions(passwordEncoder);
+            verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void brandAdminShouldNotCreateAnotherBrandAdmin() {
+
+            mockCurrentUser(20L, 1L, "BRAND_ADMIN");
+
+            CreateUserRequest request = createUserRequest(1L, "BRAND_ADMIN");
+
+            assertThrows(
+                            AccessDeniedException.class,
+                            () -> userService.createUser(request));
+
+            verifyNoInteractions(userRepository);
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void superAdminShouldNotCreatePlatformSuperAdmin() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(null, "PLATFORM_SUPER_ADMIN");
+
+            assertThrows(
+                            AccessDeniedException.class,
+                            () -> userService.createUser(request));
+
+            verifyNoInteractions(userRepository);
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void technicianShouldNotCreateUser() {
+
+            mockCurrentUser(30L, 2L, "TECHNICIAN");
+
+            CreateUserRequest request = createUserRequest(2L, "INVENTORY_STAFF");
+
+            assertThrows(
+                            AccessDeniedException.class,
+                            () -> userService.createUser(request));
+
+            verifyNoInteractions(userRepository);
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void createUserShouldRejectDuplicateUsername() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(1L, "TECHNICIAN");
+
+            when(tenantRepository.findById(1L))
+                            .thenReturn(Optional.of(tenantA));
+
+            when(userRepository.existsByUsername("new_user"))
+                            .thenReturn(true);
+
+            assertThrows(
+                            ResourceConflictException.class,
+                            () -> userService.createUser(request));
+
+            verify(userRepository, never())
+                            .saveAndFlush(any(User.class));
+
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void createUserShouldRejectDuplicateEmail() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(1L, "TECHNICIAN");
+
+            when(tenantRepository.findById(1L))
+                            .thenReturn(Optional.of(tenantA));
+
+            when(userRepository.existsByEmail("new@example.com"))
+                            .thenReturn(true);
+
+            assertThrows(
+                            ResourceConflictException.class,
+                            () -> userService.createUser(request));
+
+            verify(userRepository, never())
+                            .saveAndFlush(any(User.class));
+
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void createUserShouldRejectNonexistentTenant() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(999L, "TECHNICIAN");
+
+            when(tenantRepository.findById(999L))
+                            .thenReturn(Optional.empty());
+
+            assertThrows(
+                            ResourceNotFoundException.class,
+                            () -> userService.createUser(request));
+
+            verifyNoInteractions(userRepository);
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void createUserShouldRejectInactiveTenant() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            tenantA.setStatus("INACTIVE");
+
+            CreateUserRequest request = createUserRequest(1L, "TECHNICIAN");
+
+            when(tenantRepository.findById(1L))
+                            .thenReturn(Optional.of(tenantA));
+
+            assertThrows(
+                            ResourceConflictException.class,
+                            () -> userService.createUser(request));
+
+            verifyNoInteractions(userRepository);
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void createUserShouldRejectInvalidRole() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(1L, "UNKNOWN_ROLE");
+
+            assertThrows(
+                            IllegalArgumentException.class,
+                            () -> userService.createUser(request));
+
+            verifyNoInteractions(userRepository);
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void superAdminShouldProvideTenantId() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(null, "TECHNICIAN");
+
+            assertThrows(
+                            IllegalArgumentException.class,
+                            () -> userService.createUser(request));
+
+            verifyNoInteractions(tenantRepository);
+            verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void createUserShouldRejectMissingRoleInDatabase() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(1L, "TECHNICIAN");
+
+            when(tenantRepository.findById(1L))
+                            .thenReturn(Optional.of(tenantA));
+
+            when(roleRepository.findByCode("TECHNICIAN"))
+                            .thenReturn(Optional.empty());
+
+            assertThrows(
+                            ResourceNotFoundException.class,
+                            () -> userService.createUser(request));
+
+            verify(userRepository, never())
+                            .saveAndFlush(any(User.class));
+
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void createUserShouldRejectPasswordExceedingBCryptLimit() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(1L, "TECHNICIAN");
+
+            request.setPassword("a".repeat(73));
+
+            Role role = new Role();
+            role.setCode("TECHNICIAN");
+
+            when(tenantRepository.findById(1L))
+                            .thenReturn(Optional.of(tenantA));
+
+            when(roleRepository.findByCode("TECHNICIAN"))
+                            .thenReturn(Optional.of(role));
+
+            assertThrows(
+                            IllegalArgumentException.class,
+                            () -> userService.createUser(request));
+
+            verify(userRepository, never())
+                            .saveAndFlush(any(User.class));
+
+            verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void createUserShouldNormalizeUsernameAndEmail() {
+
+            mockCurrentUser(1L, null, "PLATFORM_SUPER_ADMIN");
+
+            CreateUserRequest request = createUserRequest(1L, "technician");
+
+            request.setUsername(" NEW_USER ");
+            request.setEmail(" NEW@EXAMPLE.COM ");
+            request.setFullName(" New User ");
+
+            mockSuccessfulUserCreation(tenantA, "TECHNICIAN");
+
+            userService.createUser(request);
+
+            ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+
+            verify(userRepository).saveAndFlush(captor.capture());
+
+            assertEquals(
+                            "new_user",
+                            captor.getValue().getUsername());
+
+            assertEquals(
+                            "new@example.com",
+                            captor.getValue().getEmail());
+
+            assertEquals(
+                            "New User",
+                            captor.getValue().getFullName());
+
+            verify(userRepository).existsByUsername("new_user");
+            verify(userRepository).existsByEmail("new@example.com");
+    }
+
+    private CreateUserRequest createUserRequest(
+                    Long tenantId,
+                    String roleCode) {
+
+            CreateUserRequest request = new CreateUserRequest();
+
+            request.setUsername("new_user");
+            request.setEmail("new@example.com");
+            request.setPassword("TestPassword123!");
+            request.setFullName("New User");
+            request.setTenantId(tenantId);
+            request.setRoleCode(roleCode);
+
+            return request;
+    }
+
+    private void mockSuccessfulUserCreation(
+                    Tenant tenant,
+                    String roleCode) {
+
+            Role role = new Role();
+            role.setCode(roleCode);
+
+            when(tenantRepository.findById(tenant.getId()))
+                            .thenReturn(Optional.of(tenant));
+
+            when(roleRepository.findByCode(roleCode))
+                            .thenReturn(Optional.of(role));
+
+            when(passwordEncoder.encode("TestPassword123!"))
+                            .thenReturn("encoded-password");
+
+            when(userRepository.saveAndFlush(any(User.class)))
+                            .thenAnswer(invocation -> invocation.getArgument(0));
     }
 }

@@ -3,12 +3,14 @@ package com.scentstation.controller;
 import com.scentstation.dto.request.UpdateUserRequest;
 import com.scentstation.dto.response.UserResponse;
 import com.scentstation.service.UserService;
+import com.scentstation.dto.request.CreateUserRequest;
 
 import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
@@ -70,5 +72,16 @@ public class UserController {
         return ResponseEntity.ok(
                 userService.updateUserStatus(id, status)
         );
+    }
+
+    // Tạo tài khoản người dùng
+    @PostMapping
+    @PreAuthorize("hasAnyRole('PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN')")
+    public ResponseEntity<UserResponse> createUser(
+            @Valid @RequestBody CreateUserRequest request) {
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(userService.createUser(request));
     }
 }

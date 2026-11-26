@@ -305,3 +305,447 @@ Phân rã dựa trên source và tổng kết Maven; không có Surefire XML tro
 | DELETE | Global | Own | Own | 403 | 403 |
 
 Giới hạn: Mockito mock repository và service; MockMvc security không chứng minh JWT thật hoặc truy vấn DB thật. Các test mapping 404/409 dùng exception giả lập; kiểm tra tenant nghiệp vụ nằm ở service tests. Chưa có ảnh Postman TASK-020 hoặc bằng chứng rollback/concurrency MySQL trong ZIP; không đánh dấu các kiểm thử đó PASS. Không có số liệu JaCoCo.
+
+
+## Mốc kiểm thử trung gian TASK-021 (27/11/2026, 01:18)
+
+Nguồn: 15 báo cáo Maven Surefire XML trong Sprint4_TestReports.zip và ảnh terminal do nhóm cung cấp. Lệnh `./mvnw.cmd clean test`, RUN_INTEGRATION_TESTS=true. BUILD SUCCESS lúc 01:18:21 +07:00, 23.805 giây. Tổng 233 test, 0 failure, 0 error, 0 skipped. Đây là kết quả một lần chạy, không cộng các lần chạy trước.
+
+| Test class | Tests | Failures | Errors | Skipped | Time (s) |
+|---|---:|---:|---:|---:|---:|
+| ScentstationBackendApplicationTests | 1 | 0 | 0 | 0 | 0.858 |
+| AuthorizationTestControllerTest | 6 | 0 | 0 | 0 | 3.342 |
+| HealthControllerTest | 1 | 0 | 0 | 0 | 0.43 |
+| MachineControllerSecurityTest | 48 | 0 | 0 | 0 | 1.588 |
+| MachineControllerTest | 2 | 0 | 0 | 0 | 0.331 |
+| MachineSlotControllerSecurityTest | 48 | 0 | 0 | 0 | 0.827 |
+| MachineSlotControllerTest | 4 | 0 | 0 | 0 | 0.086 |
+| TenantControllerTest | 4 | 0 | 0 | 0 | 0.424 |
+| UserControllerSecurityTest | 11 | 0 | 0 | 0 | 0.553 |
+| DatabaseIntegrationTest | 4 | 0 | 0 | 0 | 3.68 |
+| AuthServiceTest | 7 | 0 | 0 | 0 | 0.095 |
+| JwtServiceTest | 6 | 0 | 0 | 0 | 2.636 |
+| MachineServiceTest | 39 | 0 | 0 | 0 | 0.303 |
+| MachineSlotServiceTest | 42 | 0 | 0 | 0 | 0.256 |
+| UserServiceTest | 10 | 0 | 0 | 0 | 0.068 |
+
+### Đối chiếu điều kiện nghiệm thu
+
+| Yêu cầu | Bằng chứng | Đánh giá |
+|---|---|---|
+| Tích hợp module | Regression toàn backend và Spring context/MySQL | PASS trong phạm vi suite; luồng liên module thật chưa đủ bằng chứng |
+| Register → Login → JWT | AuthServiceTest, JwtServiceTest | PASS từng thành phần; chưa chứng minh chuỗi HTTP thật |
+| RBAC | Controller security tests | PASS phạm vi test; không thay thế JWT thật |
+| Tenant isolation | Machine/Slot service tests và security tests | PASS phạm vi test; chưa chứng minh mọi truy vấn DB thật |
+| Quan hệ User, Tenant, Product, Machine, Slot | Service tests và Hibernate validate | Một phần; chưa có test ghi liên module thật |
+| Postman | Đã thực hiện trong các task trước; XML không chứa bằng chứng Postman | Cần đối chiếu bằng chứng cũ |
+| Tổng hợp lỗi | Các sửa lỗi TASK-019/020 và cấu hình integration | Đã ghi nhận trong báo cáo từng task |
+| Tài liệu | Bộ tài liệu chung và README | Cập nhật TASK-021; cần review trước merge |
+
+Không có class kiểm thử riêng Location/Product trong lần chạy này. Không suy diễn coverage 100%, kiểm thử rollback/concurrency, E2E hoặc Postman PASS từ XML. Không sao chép XML thô vào repository vì có thể chứa biến môi trường và thông tin cấu hình.
+
+### Danh mục từng lượt kiểm thử từ Surefire
+
+
+#### ScentstationBackendApplicationTests
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `contextLoads` | PASS | 0.002 |
+
+#### AuthorizationTestControllerTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `brandAdminShouldNotAccessTechnicianEndpoint` | PASS | 0.216 |
+| 2 | `brandAdminShouldNotAccessPlatformAdminEndpoint` | PASS | 0.012 |
+| 3 | `technicianShouldNotAccessBrandAdminEndpoint` | PASS | 0.008 |
+| 4 | `technicianShouldAccessTechnicianEndpoint` | PASS | 0.011 |
+| 5 | `brandAdminShouldAccessBrandAdminEndpoint` | PASS | 0.005 |
+| 6 | `platformAdminShouldAccessPlatformAdminEndpoint` | PASS | 0.006 |
+
+#### HealthControllerTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `healthCheck_ShouldReturnUpStatus` | PASS | 0.047 |
+
+#### MachineControllerSecurityTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `inaccessibleMachineConnectionUpdateShouldReturn404` | PASS | 0.159 |
+| 2 | `nonAdminRolesShouldNotUpdateMachine(String)[1]` | PASS | 0.14 |
+| 3 | `nonAdminRolesShouldNotUpdateMachine(String)[2]` | PASS | 0.011 |
+| 4 | `nonAdminRolesShouldNotUpdateMachine(String)[3]` | PASS | 0.01 |
+| 5 | `unauthenticatedUserShouldNotCreateMachine` | PASS | 0.007 |
+| 6 | `inventoryStaffShouldNotAccessMachineDetail` | PASS | 0.007 |
+| 7 | `inventoryStaffShouldNotUpdateOperationalStatus` | PASS | 0.01 |
+| 8 | `unauthenticatedUserShouldNotUpdateConnectionStatus` | PASS | 0.009 |
+| 9 | `nonAdminShouldNotSetDisabledStatus(String)[1]` | PASS | 0.012 |
+| 10 | `nonAdminShouldNotSetDisabledStatus(String)[2]` | PASS | 0.011 |
+| 11 | `unauthorizedRolesShouldNotUpdateConnectionStatus(String)[1]` | PASS | 0.01 |
+| 12 | `unauthorizedRolesShouldNotUpdateConnectionStatus(String)[2]` | PASS | 0.007 |
+| 13 | `unauthorizedRolesShouldNotUpdateConnectionStatus(String)[3]` | PASS | 0.009 |
+| 14 | `unauthenticatedUserShouldNotUpdateMachine` | PASS | 0.008 |
+| 15 | `manualOnlineStatusShouldReturn403(String)[1]` | PASS | 0.009 |
+| 16 | `manualOnlineStatusShouldReturn403(String)[2]` | PASS | 0.012 |
+| 17 | `nonAdminRolesShouldNotDeleteMachine(String)[1]` | PASS | 0.009 |
+| 18 | `nonAdminRolesShouldNotDeleteMachine(String)[2]` | PASS | 0.012 |
+| 19 | `nonAdminRolesShouldNotDeleteMachine(String)[3]` | PASS | 0.009 |
+| 20 | `unauthenticatedUserShouldNotUpdateOperationalStatus` | PASS | 0.004 |
+| 21 | `adminRolesShouldCreateMachine(String)[1]` | PASS | 0.032 |
+| 22 | `adminRolesShouldCreateMachine(String)[2]` | PASS | 0.007 |
+| 23 | `unauthenticatedUserShouldNotDeleteMachine` | PASS | 0.005 |
+| 24 | `adminRolesShouldUpdateMachine(String)[1]` | PASS | 0.009 |
+| 25 | `adminRolesShouldUpdateMachine(String)[2]` | PASS | 0.007 |
+| 26 | `authorizedRolesShouldUpdateConnectionStatus(String)[1]` | PASS | 0.01 |
+| 27 | `authorizedRolesShouldUpdateConnectionStatus(String)[2]` | PASS | 0.007 |
+| 28 | `unauthenticatedUserShouldNotAccessMachineList` | PASS | 0.006 |
+| 29 | `inventoryStaffShouldNotAccessMachineList` | PASS | 0.008 |
+| 30 | `adminRolesShouldDisableMachine(String)[1]` | PASS | 0.008 |
+| 31 | `adminRolesShouldDisableMachine(String)[2]` | PASS | 0.007 |
+| 32 | `inaccessibleMachineShouldReturn404` | PASS | 0.007 |
+| 33 | `authorizedRolesShouldAccessMachineList(String)[1]` | PASS | 0.017 |
+| 34 | `authorizedRolesShouldAccessMachineList(String)[2]` | PASS | 0.005 |
+| 35 | `authorizedRolesShouldAccessMachineList(String)[3]` | PASS | 0.007 |
+| 36 | `authorizedRolesShouldAccessMachineList(String)[4]` | PASS | 0.006 |
+| 37 | `authorizedRolesShouldUpdateOperationalStatus(String)[1]` | PASS | 0.008 |
+| 38 | `authorizedRolesShouldUpdateOperationalStatus(String)[2]` | PASS | 0.005 |
+| 39 | `authorizedRolesShouldUpdateOperationalStatus(String)[3]` | PASS | 0.005 |
+| 40 | `authorizedRolesShouldUpdateOperationalStatus(String)[4]` | PASS | 0.005 |
+| 41 | `nonAdminRolesShouldNotCreateMachine(String)[1]` | PASS | 0.005 |
+| 42 | `nonAdminRolesShouldNotCreateMachine(String)[2]` | PASS | 0.006 |
+| 43 | `nonAdminRolesShouldNotCreateMachine(String)[3]` | PASS | 0.006 |
+| 44 | `unauthenticatedUserShouldNotAccessMachineDetail` | PASS | 0.003 |
+| 45 | `authorizedRolesShouldAccessMachineDetail(String)[1]` | PASS | 0.004 |
+| 46 | `authorizedRolesShouldAccessMachineDetail(String)[2]` | PASS | 0.003 |
+| 47 | `authorizedRolesShouldAccessMachineDetail(String)[3]` | PASS | 0.004 |
+| 48 | `authorizedRolesShouldAccessMachineDetail(String)[4]` | PASS | 0.004 |
+
+#### MachineControllerTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `getMachineById_WhenNotFound_ShouldReturn404` | PASS | 0.021 |
+| 2 | `getAllMachines_ShouldReturnMachineList` | PASS | 0.012 |
+
+#### MachineSlotControllerSecurityTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `inaccessibleSlotReturnsNotFoundWhenUpdatingStatus` | PASS | 0.023 |
+| 2 | `invalidSlotStatusReturnsBadRequest` | PASS | 0.021 |
+| 3 | `inaccessibleSlotReturnsNotFoundWhenDisabling` | PASS | 0.006 |
+| 4 | `authorizedRolesCanGetSlotDetail(String)[1]` | PASS | 0.006 |
+| 5 | `authorizedRolesCanGetSlotDetail(String)[2]` | PASS | 0.006 |
+| 6 | `authorizedRolesCanGetSlotDetail(String)[3]` | PASS | 0.005 |
+| 7 | `authorizedRolesCanGetSlotDetail(String)[4]` | PASS | 0.006 |
+| 8 | `authorizedRolesCanGetSlotDetail(String)[5]` | PASS | 0.005 |
+| 9 | `serviceAccessDeniedReturnsForbidden` | PASS | 0.006 |
+| 10 | `unauthenticatedUserCannotCreateSlot` | PASS | 0.003 |
+| 11 | `invalidCapacityReturnsBadRequest` | PASS | 0.042 |
+| 12 | `authorizedRolesCanListSlots(String)[1]` | PASS | 0.006 |
+| 13 | `authorizedRolesCanListSlots(String)[2]` | PASS | 0.005 |
+| 14 | `authorizedRolesCanListSlots(String)[3]` | PASS | 0.004 |
+| 15 | `authorizedRolesCanListSlots(String)[4]` | PASS | 0.003 |
+| 16 | `authorizedRolesCanListSlots(String)[5]` | PASS | 0.004 |
+| 17 | `inaccessibleSlotReturnsNotFoundWhenReadingDetail` | PASS | 0.004 |
+| 18 | `inaccessibleMachineReturnsNotFoundWhenListingSlots` | PASS | 0.005 |
+| 19 | `unauthenticatedUserCannotListSlots` | PASS | 0.003 |
+| 20 | `inaccessibleMachineReturnsNotFoundWhenCreatingSlot` | PASS | 0.008 |
+| 21 | `updateSlotEnforcesRolePermissions(String, int)[1]` | PASS | 0.018 |
+| 22 | `updateSlotEnforcesRolePermissions(String, int)[2]` | PASS | 0.008 |
+| 23 | `updateSlotEnforcesRolePermissions(String, int)[3]` | PASS | 0.005 |
+| 24 | `updateSlotEnforcesRolePermissions(String, int)[4]` | PASS | 0.006 |
+| 25 | `updateSlotEnforcesRolePermissions(String, int)[5]` | PASS | 0.006 |
+| 26 | `unauthenticatedUserCannotUpdateSlotStatus` | PASS | 0.003 |
+| 27 | `disableSlotEnforcesRolePermissions(String, int)[1]` | PASS | 0.006 |
+| 28 | `disableSlotEnforcesRolePermissions(String, int)[2]` | PASS | 0.004 |
+| 29 | `disableSlotEnforcesRolePermissions(String, int)[3]` | PASS | 0.004 |
+| 30 | `disableSlotEnforcesRolePermissions(String, int)[4]` | PASS | 0.006 |
+| 31 | `disableSlotEnforcesRolePermissions(String, int)[5]` | PASS | 0.004 |
+| 32 | `updateSlotStatusEnforcesRolePermissions(String, int)[1]` | PASS | 0.005 |
+| 33 | `updateSlotStatusEnforcesRolePermissions(String, int)[2]` | PASS | 0.004 |
+| 34 | `updateSlotStatusEnforcesRolePermissions(String, int)[3]` | PASS | 0.005 |
+| 35 | `updateSlotStatusEnforcesRolePermissions(String, int)[4]` | PASS | 0.003 |
+| 36 | `updateSlotStatusEnforcesRolePermissions(String, int)[5]` | PASS | 0.004 |
+| 37 | `inaccessibleSlotReturnsNotFoundWhenUpdatingConfiguration` | PASS | 0.006 |
+| 38 | `unauthenticatedUserCannotUpdateSlot` | PASS | 0.005 |
+| 39 | `disablingSlotWithRemainingInventoryReturnsConflict` | PASS | 0.005 |
+| 40 | `unauthenticatedUserCannotGetSlotDetail` | PASS | 0.003 |
+| 41 | `duplicateSlotNumberReturnsConflict` | PASS | 0.006 |
+| 42 | `updatingDisabledSlotReturnsConflict` | PASS | 0.006 |
+| 43 | `unauthenticatedUserCannotDisableSlot` | PASS | 0.005 |
+| 44 | `createSlotEnforcesRolePermissions(String, int)[1]` | PASS | 0.006 |
+| 45 | `createSlotEnforcesRolePermissions(String, int)[2]` | PASS | 0.005 |
+| 46 | `createSlotEnforcesRolePermissions(String, int)[3]` | PASS | 0.005 |
+| 47 | `createSlotEnforcesRolePermissions(String, int)[4]` | PASS | 0.006 |
+| 48 | `createSlotEnforcesRolePermissions(String, int)[5]` | PASS | 0.005 |
+
+#### MachineSlotControllerTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `getSlotsReturnsListAndCount` | PASS | 0.02 |
+| 2 | `createSlotReturnsCreatedResponse` | PASS | 0.017 |
+| 3 | `createSlotRejectsInvalidCapacityBeforeCallingService` | PASS | 0.014 |
+| 4 | `technicianCannotCreateSlotConfiguration` | PASS | 0.01 |
+
+#### TenantControllerTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `getTenantById_WhenIdIsInvalid_ShouldReturn400` | PASS | 0.013 |
+| 2 | `getAllTenants_ShouldReturnTenantList` | PASS | 0.012 |
+| 3 | `getTenantById_ShouldReturnTenant` | PASS | 0.007 |
+| 4 | `getTenantById_WhenNotFound_ShouldReturn404` | PASS | 0.009 |
+
+#### UserControllerSecurityTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `operationsManagerShouldNotAccessUserList` | PASS | 0.011 |
+| 2 | `technicianShouldNotUpdateUser` | PASS | 0.034 |
+| 3 | `brandAdminShouldAccessUpdateStatusEndpoint` | PASS | 0.008 |
+| 4 | `superAdminShouldAccessUserList` | PASS | 0.006 |
+| 5 | `inventoryStaffShouldNotLockUser` | PASS | 0.004 |
+| 6 | `unauthenticatedUserShouldNotAccessUserList` | PASS | 0.003 |
+| 7 | `brandAdminShouldAccessUserList` | PASS | 0.005 |
+| 8 | `technicianShouldNotAccessUserList` | PASS | 0.005 |
+| 9 | `operationsManagerShouldNotLockUser` | PASS | 0.004 |
+| 10 | `operationsManagerShouldNotAccessUserDetail` | PASS | 0.005 |
+| 11 | `inventoryStaffShouldNotAccessUserList` | PASS | 0.005 |
+
+#### DatabaseIntegrationTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `applicationContextShouldLoad` | PASS | 0.018 |
+| 2 | `shouldConnectToMySqlServer` | PASS | 0.017 |
+| 3 | `shouldContainAllRequiredTables` | PASS | 0.003 |
+| 4 | `shouldConnectToTestDatabase` | PASS | 0.003 |
+
+#### AuthServiceTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `loginWithLockedAccountShouldThrowException` | PASS | 0.076 |
+| 2 | `loginWithUnknownAccountShouldThrowException` | PASS | 0.002 |
+| 3 | `loginWithEmailShouldReturnAuthResponse` | PASS | 0.002 |
+| 4 | `loginWithUsernameShouldReturnAuthResponse` | PASS | 0.002 |
+| 5 | `loginWithInactiveAccountShouldThrowException` | PASS | 0.003 |
+| 6 | `loginWithWrongPasswordShouldThrowException` | PASS | 0.003 |
+| 7 | `loginWithoutTenantShouldReturnNullTenantCode` | PASS | 0.004 |
+
+#### JwtServiceTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `shouldReturnFalseForWrongUsername` | PASS | 0.124 |
+| 2 | `shouldReturnFalseForTamperedToken` | PASS | 0.001 |
+| 3 | `shouldDetectExpiredToken` | PASS | 2.504 |
+| 4 | `shouldGenerateTokenSuccessfully` | PASS | 0.002 |
+| 5 | `shouldReturnTrueForValidToken` | PASS | 0.001 |
+| 6 | `shouldExtractCustomClaims` | PASS | 0.003 |
+
+#### MachineServiceTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `updateMachine_DuplicateSerialNumber_Throws409` | PASS | 0.218 |
+| 2 | `getAll_InvalidConnectionStatus_ThrowsException` | PASS | 0.003 |
+| 3 | `getAll_FilterByOperationalStatus` | PASS | 0.001 |
+| 4 | `createMachine_WithDuplicateSerialNumber_Throws409` | PASS | 0.003 |
+| 5 | `createMachine_WithInactiveLocation_Throws409` | PASS | 0.003 |
+| 6 | `updateOperationalStatus_ByBrandAdmin_ReenableDisabled_Success` | PASS | 0.002 |
+| 7 | `getAll_RequestOtherTenant_Throws404` | PASS | 0.002 |
+| 8 | `updateMachine_DuplicateMachineCode_Throws409` | PASS | 0.002 |
+| 9 | `getAll_ByBrandAdmin_OnlySearchOwnTenant` | PASS | 0.002 |
+| 10 | `updateConnectionStatus_ByPlatformAdmin_ToOnline_Throws403` | PASS | 0.002 |
+| 11 | `updateMachine_DuplicateDeviceIdentity_Throws409` | PASS | 0.002 |
+| 12 | `updateConnectionStatus_ByPlatformAdmin_ToOffline_Success` | PASS | 0.003 |
+| 13 | `deleteMachine_OtherTenantMachine_Throws404` | PASS | 0.003 |
+| 14 | `getById_OtherTenantMachine_Throws404` | PASS | 0.003 |
+| 15 | `createMachine_WithOtherTenantLocation_Throws404` | PASS | 0.002 |
+| 16 | `softDelete_SetsOperationalStatusDisabled` | PASS | 0.002 |
+| 17 | `updateOperationalStatus_OtherTenantMachine_Throws404` | PASS | 0.002 |
+| 18 | `updateConnectionStatus_ByInventoryStaff_Throws403` | PASS | 0.002 |
+| 19 | `getAll_FilterByLocationId` | PASS | 0.001 |
+| 20 | `updateMachine_ValidRequest_Success` | PASS | 0.002 |
+| 21 | `updateOperationalStatus_InvalidStatus_ThrowsException` | PASS | 0.001 |
+| 22 | `updateConnectionStatus_ByBrandAdmin_Throws403` | PASS | 0.002 |
+| 23 | `updateConnectionStatus_ByTechnician_UpdatesConnectionOnly` | PASS | 0.001 |
+| 24 | `getAll_ByPlatformAdmin_SearchAllTenants` | PASS | 0.001 |
+| 25 | `updateMachine_WithOtherTenantLocation_Throws404` | PASS | 0.001 |
+| 26 | `updateConnectionStatus_OtherTenantMachine_Throws404` | PASS | 0.002 |
+| 27 | `createMachine_ByBrandAdmin_ForOtherTenant_Throws403` | PASS | 0.002 |
+| 28 | `updateConnectionStatus_ByOperationsManager_Throws403` | PASS | 0.001 |
+| 29 | `updateConnectionStatus_ByTechnician_ToOnline_Throws403` | PASS | 0.001 |
+| 30 | `updateOperationalStatus_DoesNotModifyConnectionStatus` | PASS | 0.001 |
+| 31 | `getAll_FilterByConnectionStatus` | PASS | 0.003 |
+| 32 | `createMachine_ByBrandAdmin_DefaultsOfflineAndActive` | PASS | 0.002 |
+| 33 | `createMachine_WithDuplicateMachineCode_Throws409` | PASS | 0.001 |
+| 34 | `createMachine_WithDuplicateDeviceIdentity_Throws409` | PASS | 0.001 |
+| 35 | `updateOperationalStatus_ByTechnician_ReenableDisabled_Throws403` | PASS | 0.001 |
+| 36 | `inventoryStaff_CannotAccessMachines` | PASS | 0.002 |
+| 37 | `updateOperationalStatus_ByTechnician_ToDisabled_Throws403` | PASS | 0.001 |
+| 38 | `updateConnectionStatus_InvalidStatus_ThrowsException` | PASS | 0.001 |
+| 39 | `updateMachine_OtherTenantMachine_Throws404` | PASS | 0.002 |
+
+#### MachineSlotServiceTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `createSlotRejectsNegativeCurrentVolume` | PASS | 0.174 |
+| 2 | `superAdminCanReadSlotFromAnotherTenant` | PASS | 0.002 |
+| 3 | `updateSlotRejectsDisabledMachine` | PASS | 0.002 |
+| 4 | `tenantCannotUpdateAnotherTenantsSlot` | PASS | 0.002 |
+| 5 | `superAdminCannotAssignProductFromDifferentTenant` | PASS | 0.002 |
+| 6 | `createSlotRejectsProductFromAnotherTenant` | PASS | 0.001 |
+| 7 | `createSlotRejectsPositiveInventoryWithoutProduct` | PASS | 0.0 |
+| 8 | `disableSlotSoftDisablesAnEmptySlot` | PASS | 0.001 |
+| 9 | `updateSlotRejectsProductRemovalWhileInventoryRemains` | PASS | 0.001 |
+| 10 | `createSlotRejectsZeroCapacity` | PASS | 0.002 |
+| 11 | `updateSlotStatusRejectsDisabledSlot` | PASS | 0.002 |
+| 12 | `inventoryStaffCannotUpdateSlotStatus` | PASS | 0.002 |
+| 13 | `createSlotRejectsDuplicateSlotNumber` | PASS | 0.001 |
+| 14 | `updateSlotRejectsDisabledSlot` | PASS | 0.001 |
+| 15 | `updateSlotPreservesErrorStatus` | PASS | 0.002 |
+| 16 | `createSlotCalculatesEmptyStatusAndStoresInitialVolume` | PASS | 0.002 |
+| 17 | `updateSlotAllowsProductChangeWhenEmpty` | PASS | 0.001 |
+| 18 | `tenantCannotCreateSlotOnAnotherTenantsMachine` | PASS | 0.003 |
+| 19 | `disableSlotRefusesToDiscardRemainingInventory` | PASS | 0.002 |
+| 20 | `technicianCannotCreateSlot` | PASS | 0.002 |
+| 21 | `listSlotsRejectsCrossTenantProductReference` | PASS | 0.002 |
+| 22 | `createSlotRejectsCurrentVolumeAboveCapacity` | PASS | 0.002 |
+| 23 | `tenantCannotUpdateAnotherTenantsSlotStatus` | PASS | 0.002 |
+| 24 | `updateSlotRejectsProductFromAnotherTenant` | PASS | 0.001 |
+| 25 | `disableSlotIsIdempotent` | PASS | 0.001 |
+| 26 | `tenantCannotListSlotsOfAnotherTenantsMachine` | PASS | 0.001 |
+| 27 | `createSlotRecordsNonZeroInitialVolumeAsInventoryAdjustment` | PASS | 0.002 |
+| 28 | `createSlotRejectsDisabledMachine` | PASS | 0.001 |
+| 29 | `inventoryStaffCannotDisableSlot` | PASS | 0.002 |
+| 30 | `tenantCannotDisableAnotherTenantsSlot` | PASS | 0.002 |
+| 31 | `createSlotRejectsInactiveProduct` | PASS | 0.001 |
+| 32 | `updateSlotStatusRejectsDisabledMachine` | PASS | 0.001 |
+| 33 | `updateSlotDoesNotAllowCapacityBelowCurrentVolume` | PASS | 0.003 |
+| 34 | `updateSlotRejectsProductChangeWhileInventoryRemains` | PASS | 0.002 |
+| 35 | `createSlotRejectsNegativeThreshold` | PASS | 0.002 |
+| 36 | `createSlotRejectsThresholdAboveCapacity` | PASS | 0.002 |
+| 37 | `updateSlotStatusRejectsInvalidStatus` | PASS | 0.002 |
+| 38 | `technicianCannotDisableSlot` | PASS | 0.002 |
+| 39 | `tenantCannotReadAnotherTenantsSlot` | PASS | 0.002 |
+| 40 | `updateSlotStatusRecalculatesInventoryStatuses` | PASS | 0.002 |
+| 41 | `technicianCannotUpdateSlotConfiguration` | PASS | 0.001 |
+| 42 | `updateSlotPreservesCurrentVolumeAndRecalculatesStatus` | PASS | 0.003 |
+
+#### UserServiceTest
+
+| STT | Test case (Surefire) | Kết quả | Time (s) |
+|---:|---|---|---:|
+| 1 | `brandAdminShouldNotLockAnotherBrandAdmin` | PASS | 0.049 |
+| 2 | `superAdminShouldUpdateAnyUser` | PASS | 0.002 |
+| 3 | `brandAdminShouldUpdateEmployeeInSameTenant` | PASS | 0.002 |
+| 4 | `brandAdminShouldNotUpdateAnotherBrandAdmin` | PASS | 0.003 |
+| 5 | `brandAdminShouldNotUpdateOwnAdminAccount` | PASS | 0.001 |
+| 6 | `invalidUserStatusShouldBeRejected` | PASS | 0.001 |
+| 7 | `superAdminShouldNotLockOwnAccount` | PASS | 0.002 |
+| 8 | `brandAdminShouldLockEmployeeInSameTenant` | PASS | 0.001 |
+| 9 | `brandAdminShouldNotUpdateOtherTenantUser` | PASS | 0.002 |
+| 10 | `technicianShouldNotUpdateUsers` | PASS | 0.002 |
+
+## TASK-021 — Regression cuối Sprint 4
+
+Nguồn: ảnh terminal và bảng tổng hợp Surefire do nhóm cung cấp, 27/11/2026 02:47:34 +07:00; `./mvnw.cmd clean test` với RUN_INTEGRATION_TESTS=true, 32.783 giây, BUILD SUCCESS. 341/341 PASS, 0 failures/errors/skipped, 19 class. Mốc 233 trước đó là lịch sử, không cộng dồn. 145 service, 145 security/authorization, 11 controller, 39 integration, 1 application context. Không có thời gian từng class của lần cuối.
+
+| Class | Tests | Failures | Errors | Skipped |
+|---|---:|---:|---:|---:|
+| AuthorizationTestControllerTest | 6 | 0 | 0 | 0 |
+| HealthControllerTest | 1 | 0 | 0 | 0 |
+| MachineControllerSecurityTest | 48 | 0 | 0 | 0 |
+| MachineControllerTest | 2 | 0 | 0 | 0 |
+| MachineSlotControllerSecurityTest | 48 | 0 | 0 | 0 |
+| MachineSlotControllerTest | 4 | 0 | 0 | 0 |
+| TenantControllerSecurityTest | 25 | 0 | 0 | 0 |
+| TenantControllerTest | 4 | 0 | 0 | 0 |
+| UserControllerSecurityTest | 18 | 0 | 0 | 0 |
+| AuthenticationIntegrationTest | 21 | 0 | 0 | 0 |
+| BusinessFlowIntegrationTest | 14 | 0 | 0 | 0 |
+| DatabaseIntegrationTest | 4 | 0 | 0 | 0 |
+| ScentstationBackendApplicationTests | 1 | 0 | 0 | 0 |
+| AuthServiceTest | 7 | 0 | 0 | 0 |
+| JwtServiceTest | 6 | 0 | 0 | 0 |
+| MachineServiceTest | 39 | 0 | 0 | 0 |
+| MachineSlotServiceTest | 42 | 0 | 0 | 0 |
+| TenantServiceTest | 26 | 0 | 0 | 0 |
+| UserServiceTest | 25 | 0 | 0 | 0 |
+
+| Tổng | 341 | 0 | 0 | 0 |
+
+Authentication và BusinessFlow dùng SpringBootTest + MockMvc với filter thật, JDBC/MySQL thật, @Transactional rollback mặc định; không phải HTTP qua cổng mạng hoặc E2E trình duyệt. Fixture admin được insert trực tiếp vào DB test, role lấy từ seed, UUID riêng từng test. Kiểm tra SELECT DATABASE() trước ghi.
+
+| Điều kiện issue | Bằng chứng cuối |
+|---|---|
+| Register/Login/JWT | Thay Register bằng cấp tài khoản; 21 authentication test, public register 401 |
+| RBAC và tenant isolation | Security/service và integration, gồm cross-tenant resource |
+| Quan hệ liên module | 14 business flow test; tạo tenant/user/location/product/machine/slot, ADJUSTMENT tồn ban đầu |
+| Postman | Bằng chứng các task trước; chưa có bộ Postman đầy đủ cho lần cuối |
+| Lỗi | Cấu hình DB test và tên cột inventory_transactions.slot_id đã sửa; regression PASS |
+| Tài liệu | Bộ tài liệu chung cập nhật, chờ review/merge |
+
+Không suy ra coverage 100%, kiểm thử concurrency, commit thực tế ngoài transaction test, MQTT/payment/dispense hay production readiness.
+
+### DatabaseIntegrationTest
+
+| ID | Method | Kết quả lần regression |
+|---|---|---|
+| DAT-01 | `applicationContextShouldLoad` | PASS |
+| DAT-02 | `shouldConnectToTestDatabase` | PASS |
+| DAT-03 | `shouldContainAllRequiredTables` | PASS |
+| DAT-04 | `shouldConnectToMySqlServer` | PASS |
+
+### AuthenticationIntegrationTest
+
+| ID | Method | Kết quả lần regression |
+|---|---|---|
+| AUT-01 | `shouldLoginWithUsername` | PASS |
+| AUT-02 | `shouldLoginWithEmail` | PASS |
+| AUT-03 | `shouldRejectIncorrectPassword` | PASS |
+| AUT-04 | `shouldRejectUnknownUser` | PASS |
+| AUT-05 | `shouldRejectInvalidLoginRequest` | PASS |
+| AUT-06 | `validJwtShouldAccessProtectedApi` | PASS |
+| AUT-07 | `missingJwtShouldReturn401` | PASS |
+| AUT-08 | `invalidJwtShouldReturn401` | PASS |
+| AUT-09 | `tamperedJwtShouldReturn401` | PASS |
+| AUT-10 | `shouldCreateTenantAndBrandAdminThenLogin` | PASS |
+| AUT-11 | `createdUserPasswordShouldBeHashedWithBCrypt` | PASS |
+| AUT-12 | `brandAdminShouldCreateEmployeeInOwnTenant` | PASS |
+| AUT-13 | `shouldRejectDuplicateEmail` | PASS |
+| AUT-14 | `shouldRejectDuplicateUsername` | PASS |
+| AUT-15 | `technicianShouldNotAccessUserManagement` | PASS |
+| AUT-16 | `brandAdminShouldNotCreatePlatformSuperAdmin` | PASS |
+| AUT-17 | `brandAdminShouldNotReadAnotherTenantUser` | PASS |
+| AUT-18 | `lockedUserShouldNotLogin` | PASS |
+| AUT-19 | `lockedUserExistingJwtShouldBeRejected` | PASS |
+| AUT-20 | `brandAdminShouldNotCreateTenant` | PASS |
+| AUT-21 | `publicRegistrationShouldNotBeAllowed` | PASS |
+
+### BusinessFlowIntegrationTest
+
+| ID | Method | Kết quả lần regression |
+|---|---|---|
+| BUS-01 | `shouldCompleteBusinessConfigurationFlow` | PASS |
+| BUS-02 | `shouldRecordInitialInventoryTransaction` | PASS |
+| BUS-03 | `shouldRejectCrossTenantLocationAccess` | PASS |
+| BUS-04 | `shouldRejectCrossTenantProductAccess` | PASS |
+| BUS-05 | `shouldRejectCrossTenantMachineAccess` | PASS |
+| BUS-06 | `shouldRejectCrossTenantSlotAccess` | PASS |
+| BUS-07 | `shouldRejectProductAssignmentFromAnotherTenant` | PASS |
+| BUS-08 | `shouldRejectDuplicateSlotNumber` | PASS |
+| BUS-09 | `technicianShouldReadButNotCreateMachineSlot` | PASS |
+| BUS-10 | `inventoryStaffShouldCreateSlotButNotDisableIt` | PASS |
+| BUS-11 | `shouldRejectDisablingSlotWithRemainingInventory` | PASS |
+| BUS-12 | `shouldSoftDisableEmptySlot` | PASS |
+| BUS-13 | `platformAdminShouldReadResourcesAcrossTenants` | PASS |
+| BUS-14 | `protectedBusinessEndpointsShouldRequireJwt` | PASS |
