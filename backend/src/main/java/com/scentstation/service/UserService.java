@@ -13,6 +13,7 @@ import com.scentstation.repository.UserRepository;
 import jakarta.transaction.Transactional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
 
@@ -76,6 +77,8 @@ public class UserService {
 
         User user = findAccessibleUser(userId);
 
+        validateUserManagementPermission(user);
+
         String email = request.getEmail().trim();
 
         if (userRepository.existsByEmailAndIdNot(
@@ -100,6 +103,8 @@ public class UserService {
             String status) {
 
         User user = findAccessibleUser(userId);
+        
+        validateUserManagementPermission(user);
 
         String normalizedStatus =
                 status.trim().toUpperCase();
@@ -161,4 +166,44 @@ public class UserService {
                 )
         );
     }
+    
+    private void validateUserManagementPermission(User targetUser) {
+        CurrentUserPrincipal current =
+            currentUserService.getCurrentUser();
+        // Platform Super Admin được quản lý User
+        // trên toàn hệ thống.
+        if (current.isPlatformSuperAdmin()) {
+                return;
+        }
+        // Chỉ Brand Admin mới có quyền quản lý User.
+        if (!current.hasRole("BRAND_ADMIN")) {
+                throw new AccessDeniedException(
+                        "You do not have permission to manage users"
+                );
+        }
+        // Brand Admin chỉ được quản lý User cùng tenant.
+        if (current.tenantId() == null 
+                || targetUser.getTenant() == null
+                || !current.tenantId().equals(
+                            targetUser.getTenant().getId()
+                )) {
+                throw new AccessDeniedException(
+                "You cannot manage users from another tenant"
+                );
+        }
+        // Không cho Brand Admin quản lý
+        // Platform Super Admin hoặc Brand Admin khác.
+        boolean targetIsPrivileged = targetUser.getRoles()
+            .stream()
+            .anyMatch(role ->
+                    "PLATFORM_SUPER_ADMIN".equals(role.getCode())
+                    || "BRAND_ADMIN".equals(role.getCode())
+            );
+
+        if (targetIsPrivileged) {
+                throw new AccessDeniedException(
+                        "Brand Admin cannot manage administrator accounts"
+                );
+        }
+   }
 }

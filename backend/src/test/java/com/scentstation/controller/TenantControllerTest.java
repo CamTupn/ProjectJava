@@ -4,6 +4,8 @@ import com.scentstation.dto.response.TenantResponse;
 import com.scentstation.exception.ResourceNotFoundException;
 import com.scentstation.service.JwtService;
 import com.scentstation.service.TenantService;
+import com.scentstation.repository.UserRepository;
+
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +28,9 @@ class TenantControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private UserRepository userRepository;
 
     @MockitoBean
     private TenantService tenantService;

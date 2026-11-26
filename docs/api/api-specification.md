@@ -617,112 +617,93 @@ Same validation rules as create. A product outside the caller's tenant scope mus
 
 # 7. Machine and Slot Module
 
+> TASK-019: hợp đồng dưới đây phản ánh source tại branch fix/task-019-machine-management, 26/11/2026. Slot endpoints bên dưới giữ nguyên đặc tả thiết kế, chưa được xác nhận bởi bộ test TASK-019.
+
 ## 7.1 List Machines
 
 ### `GET /api/v1/machines`
 
-**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `TECHNICIAN`
+Query tùy chọn: `tenantId` (Long), `locationId` (Long), `connectionStatus` (ONLINE/OFFLINE), `operationalStatus` (ACTIVE/MAINTENANCE/DISABLED/ERROR). Các bộ lọc trạng thái được trim và uppercase tại Service. Không có pagination trong implementation hiện tại.
 
-### Query
-
-```text
-?tenantId=tenant_001&status=ONLINE&page=0&size=20
-```
-
-### Response
+Response 200: JSON array trực tiếp, ví dụ:
 
 ```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "id": "machine_001",
-        "code": "KIOSK-001",
-        "brandId": "tenant_001",
-        "location": "Store A",
-        "status": "ONLINE",
-        "operationalStatus": "ACTIVE",
-        "lastSeenAt": "2026-10-15T12:59:30Z"
-      }
-    ],
-    "page": 0,
-    "size": 20,
-    "totalElements": 1,
-    "totalPages": 1
+[
+  {
+    "id": 8, "tenantId": 1, "locationId": 4,
+    "location": {"id": 4, "name": "SCENT Landmark 81", "address": "Vinhomes Central Park", "status": "ACTIVE"},
+    "machineCode": "TEST-019-M01-UPDATED", "serialNumber": "TEST-019-SN01",
+    "deviceIdentity": "TEST-019-DEVICE01", "connectionStatus": "OFFLINE",
+    "operationalStatus": "ACTIVE", "firmwareVersion": "1.1.0", "lastPingAt": null,
+    "createdAt": "2026-11-26T16:56:44", "updatedAt": "2026-11-26T17:32:36"
   }
-}
+]
 ```
 
----
+Các giá trị minh họa; DTO dùng Long và LocalDateTime, không phải UUID hoặc timestamp có timezone. Location có thể null.
 
 ## 7.2 Register Machine
 
 ### `POST /api/v1/machines`
 
-**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`
-
-### Request
-
 ```json
-{
-  "code": "KIOSK-001",
-  "brandId": "tenant_001",
-  "location": "Store A",
-  "status": "ACTIVE"
-}
+{"tenantId": 1, "machineCode": "SCENT-M099", "serialNumber": "SCENT-SN-0099", "deviceIdentity": "scent-device-0099", "locationId": 4, "firmwareVersion": "1.0.0", "connectionStatus": "OFFLINE", "operationalStatus": "ACTIVE"}
 ```
 
-### Validation
-
-- `code`: required and unique.
-- `tenantId`: required and authorized.
-- `location`: required according to deployment policy.
-- Machine must not be registered to an unauthorized tenant.
-
-### Response `201 Created`
-
-Returns machine data.
-
-### Errors
-
-- `400 VALIDATION_ERROR`
-- `403 TENANT_ACCESS_DENIED`
-- `404 TENANT_NOT_FOUND`
-- `409 MACHINE_CODE_ALREADY_EXISTS`
-
----
+machineCode/serialNumber bắt buộc, tối đa 100 ký tự; deviceIdentity bắt buộc, tối đa 150; firmwareVersion tối đa 100. tenantId bắt buộc với platform, tùy chọn với brand. locationId và hai trạng thái tùy chọn. DTO create kiểm tra enum viết hoa. Response 201: một MachineResponse trực tiếp.
 
 ## 7.3 Get Machine
 
 ### `GET /api/v1/machines/{machineId}`
 
-**Access:** Scoped administrative users.
-
-Returns machine status, `lastSeenAt`, and high-level operational state.
-
----
+Response 200: một MachineResponse như phần 7.1; ngoài tenant hoặc không tồn tại: 404.
 
 ## 7.4 Update Machine
 
-### `PATCH /api/v1/machines/{machineId}`
-
-**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`
-
-### Request
+### `PUT /api/v1/machines/{machineId}`
 
 ```json
-{
-  "location": "Store B",
-  "status": "ACTIVE"
-}
+{"machineCode": "SCENT-M099-UPDATED", "locationId": 4, "firmwareVersion": "1.1.0"}
 ```
 
-### Errors
+Các trường được hỗ trợ: machineCode, serialNumber, deviceIdentity, locationId, firmwareVersion; giới hạn độ dài như create. Response 200: MachineResponse. Không hỗ trợ PATCH thông tin chung.
 
-- `400 VALIDATION_ERROR`
-- `403 TENANT_ACCESS_DENIED`
-- `404 MACHINE_NOT_FOUND`
+### `DELETE /api/v1/machines/{machineId}`
+
+Response 200: ApiResponse với success=true, message="Machine disabled successfully", data=null.
+
+### `PATCH /api/v1/machines/{machineId}/status?status=MAINTENANCE`
+
+### `PATCH /api/v1/machines/{machineId}/connection-status?status=OFFLINE`
+
+Hai endpoint nhận query parameter status, không cần JSON body. Response 200: MachineResponse. Quy tắc quyền và trạng thái bên dưới.
+
+### RBAC và quy tắc nghiệp vụ (đã triển khai)
+
+| Thao tác | PLATFORM_SUPER_ADMIN | BRAND_ADMIN | OPERATIONS_MANAGER | TECHNICIAN | INVENTORY_STAFF |
+|---|---|---|---|---|---|---|
+| GET list/detail | Global | Own | Own | Own | 403 |
+| POST / PUT / DELETE | Global | Own | 403 | 403 | 403 |
+| PATCH operational status | Global | Own | Own, giới hạn | Own, giới hạn | 403 |
+| PATCH connection OFFLINE | Global | 403 | 403 | Own | 403 |
+| PATCH connection ONLINE | 403 | 403 | 403 | 403 | 403 |
+
+- Global: toàn hệ thống; Own: tenant của principal. Controller kiểm tra role; Service kiểm tra lại role và phạm vi dữ liệu.
+- OPS/TECH không được đặt DISABLED hoặc thay đổi operational status của máy đã DISABLED. Admin có thể kích hoạt lại máy.
+- ONLINE không được thiết lập thủ công, kể cả PLATFORM_SUPER_ADMIN; cần xác nhận thiết bị trong luồng IoT tương lai. PATCH OFFLINE không sửa operationalStatus hay lastPingAt.
+- Tạo máy luôn OFFLINE; yêu cầu ONLINE bị từ chối 400. Operational mặc định ACTIVE; hai trạng thái độc lập.
+- Tenant admin không được tạo máy cho tenant khác (403); truy vấn máy/tenant khác trả 404. Platform phải cung cấp tenantId khi tạo; tenant phải ACTIVE. Location tùy chọn, nếu có phải ACTIVE và cùng tenant. Platform chọn location sai tenant: 400; tenant user chọn location ngoài scope: 404.
+- machineCode, serialNumber, deviceIdentity duy nhất toàn hệ thống; trùng hoặc vi phạm ràng buộc khi saveAndFlush trả 409. PUT chỉ sửa trường khác null, không đổi tenant hoặc trạng thái; locationId null không gỡ location. DELETE chỉ đặt DISABLED, không xóa bản ghi.
+
+### Error contract
+
+401 chưa xác thực; 403 không có quyền; 404 không tìm thấy trong scope; 400 validation/enum sai; 409 conflict. Error response dùng ApiResponse, ví dụ:
+
+```json
+{"success": false, "message": "Invalid connection status. Allowed: ONLINE, OFFLINE", "data": null, "errors": {}, "timestamp": "2026-11-26T18:08:20"}
+```
+
+Không cam kết mã lỗi dạng string riêng. Trường errors có thể chứa lỗi validation. Trường hợp thiếu query status chưa được xác nhận bằng test riêng; cần kiểm tra mapping exception trước khi cam kết HTTP 400.
 
 ---
 
@@ -2320,3 +2301,97 @@ The following endpoint groups are included in this contract proposal. A module d
 - [ ] TASK-004 ERD/Data Dictionary approved and frozen.
 - [ ] TASK-003/TASK-006 consistency review completed.
 - [ ] Team approval recorded on GitHub Issue/PR.
+
+
+# Đặc tả triển khai đã đối chiếu — quản lý danh mục và thiết bị
+
+Phần này ưu tiên khi ví dụ thiết kế trước đó khác với API hiện hành. Các module chưa có controller tương ứng vẫn là thiết kế, không phải API đã xác nhận chạy.
+
+## Location & Product Management
+
+## Implemented routes
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/v1/locations` | List locations; optional `status`, `name`, `tenantId` |
+| GET | `/api/v1/locations/{id}` | Location detail |
+| POST | `/api/v1/locations` | Create location |
+| PUT | `/api/v1/locations/{id}` | Update name, address, description |
+| DELETE | `/api/v1/locations/{id}` | Soft-delete (`status=INACTIVE`) |
+| GET | `/api/v1/products` | List products; optional `status`, `name`, `tenantId` |
+| GET | `/api/v1/products/{id}` | Product detail |
+| POST | `/api/v1/products` | Create product |
+| PUT | `/api/v1/products/{id}` | Update product details (SKU and tenant are immutable) |
+| DELETE | `/api/v1/products/{id}` | Soft-delete (`status=INACTIVE`) |
+
+## Authorization and tenant scope
+
+- `PLATFORM_SUPER_ADMIN`: can read/manage all tenants. When creating a Location or Product, `tenantId` is required in the body.
+- `BRAND_ADMIN`: can read/manage only the tenant ID embedded in the authenticated JWT principal. A body `tenantId` is ignored; a query `tenantId` that differs from the caller tenant is rejected as not found.
+- `OPERATIONS_MANAGER`, `TECHNICIAN`, and `INVENTORY_STAFF`: denied by default. The repository currently has no per-user permission/permission-grant model, so this task does not invent grants for those roles. Extend the service checks only after the team defines the permission source.
+- Tenant scope checks are repeated in the service layer; controller annotations are an additional RBAC boundary.
+
+## Delete protection
+
+- A Location cannot be deactivated while any Machine references it through `machines.location_id`.
+- A Product cannot be deactivated while any Machine Slot references it through `machine_slots.product_id`.
+- Product rows are never physically deleted. Order history keeps its product foreign-key reference and snapshots; setting the product to `INACTIVE` preserves that history.
+
+## Request examples
+
+Brand Admin creates a Location:
+
+```json
+{
+  "name": "District 1 Store",
+  "address": "123 Nguyen Hue, District 1, Ho Chi Minh City",
+  "description": "Retail location"
+}
+```
+
+Platform Super Admin creates a Product (tenantId is required for this role):
+
+```json
+{
+  "tenantId": 1,
+  "sku": "ROSE-001",
+  "name": "Rose Eau de Parfum",
+  "description": "Floral fragrance",
+  "fragranceNotes": "Rose, musk, vanilla",
+  "imageUrl": "https://example.com/rose.jpg",
+  "price": 150000.00,
+  "volumePerSprayMl": 0.10
+}
+```
+
+
+## Machine Management
+
+## Implemented routes
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/v1/machines` | List machines; optional `connectionStatus`, `operationalStatus`, `locationId`, `tenantId` |
+| GET | `/api/v1/machines/{id}` | Machine detail including nested Location info |
+| POST | `/api/v1/machines` | Register a new machine (defaults: `connectionStatus=OFFLINE`, `operationalStatus=ACTIVE`) |
+| PUT | `/api/v1/machines/{id}` | Update `machineCode`, `serialNumber`, `deviceIdentity`, `locationId`, `firmwareVersion` |
+| DELETE | `/api/v1/machines/{id}` | Soft-delete (`operationalStatus=DISABLED`) |
+| PATCH | `/api/v1/machines/{id}/status?status=MAINTENANCE` | Update `operationalStatus` independently (`ACTIVE`, `MAINTENANCE`, `DISABLED`, `ERROR`) |
+| PATCH | `/api/v1/machines/{id}/connection-status?status=OFFLINE` | Update `connectionStatus` independently (`ONLINE`, `OFFLINE`) |
+
+### RBAC và quy tắc nghiệp vụ (đã triển khai)
+
+| Thao tác | PLATFORM_SUPER_ADMIN | BRAND_ADMIN | OPERATIONS_MANAGER | TECHNICIAN | INVENTORY_STAFF |
+|---|---|---|---|---|---|---|
+| GET list/detail | Global | Own | Own | Own | 403 |
+| POST / PUT / DELETE | Global | Own | 403 | 403 | 403 |
+| PATCH operational status | Global | Own | Own, giới hạn | Own, giới hạn | 403 |
+| PATCH connection OFFLINE | Global | 403 | 403 | Own | 403 |
+| PATCH connection ONLINE | 403 | 403 | 403 | 403 | 403 |
+
+- Global: toàn hệ thống; Own: tenant của principal. Controller kiểm tra role; Service kiểm tra lại role và phạm vi dữ liệu.
+- OPS/TECH không được đặt DISABLED hoặc thay đổi operational status của máy đã DISABLED. Admin có thể kích hoạt lại máy.
+- ONLINE không được thiết lập thủ công, kể cả PLATFORM_SUPER_ADMIN; cần xác nhận thiết bị trong luồng IoT tương lai. PATCH OFFLINE không sửa operationalStatus hay lastPingAt.
+- Tạo máy luôn OFFLINE; yêu cầu ONLINE bị từ chối 400. Operational mặc định ACTIVE; hai trạng thái độc lập.
+- Tenant admin không được tạo máy cho tenant khác (403); truy vấn máy/tenant khác trả 404. Platform phải cung cấp tenantId khi tạo; tenant phải ACTIVE. Location tùy chọn, nếu có phải ACTIVE và cùng tenant. Platform chọn location sai tenant: 400; tenant user chọn location ngoài scope: 404.
+- machineCode, serialNumber, deviceIdentity duy nhất toàn hệ thống; trùng hoặc vi phạm ràng buộc khi saveAndFlush trả 409. PUT chỉ sửa trường khác null, không đổi tenant hoặc trạng thái; locationId null không gỡ location. DELETE chỉ đặt DISABLED, không xóa bản ghi.
