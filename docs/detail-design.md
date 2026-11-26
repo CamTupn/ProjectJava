@@ -157,7 +157,7 @@ Schema MySQL hiện tại có **21 bảng**, dùng khóa ngoại và CHECK/UNIQU
 
 **Không dùng `ddl-auto=create/update`**. Chỉ dùng `validate` và migration có review. Không sửa `schema.sql`/`seed.sql` trong nhánh chức năng khi chưa được trưởng nhóm duyệt.
 
-## 5. Location Management — TASK-018 [ĐANG TRIỂN KHAI]
+## 5. Location Management — TASK-018 [HIỆN CÓ — CHƯA CÓ TEST RIÊNG TRONG SNAPSHOT]
 
 **Luồng lớp:** `LocationController` → `LocationService` → `LocationRepository` → `locations`; `LocationMapper`, `CreateLocationRequest`, `UpdateLocationRequest`, `LocationResponse`.
 
@@ -171,7 +171,7 @@ Schema MySQL hiện tại có **21 bảng**, dùng khóa ngoại và CHECK/UNIQU
 
 **Transaction delete:** load location trong tenant → kiểm tra machine đang gán (theo quy tắc thống nhất về machine active/disabled) → nếu đang dùng trả conflict → cập nhật status `INACTIVE` → commit. Tránh race giữa thao tác gán machine và disable location bằng ràng buộc/locking phù hợp. **[CẦN CHỐT]** Định nghĩa “còn Machine đang được gán” gồm cả máy DISABLED hay không: task ghi “vẫn còn Machine đang được gán”, nên mặc định từ chối nếu tồn tại liên kết cho đến khi trưởng nhóm thống nhất ngoại lệ.
 
-## 6. Product Management — TASK-018 [ĐANG TRIỂN KHAI]
+## 6. Product Management — TASK-018 [HIỆN CÓ — CHƯA CÓ TEST RIÊNG TRONG SNAPSHOT]
 
 `ProductController` → `ProductService` → `ProductRepository` → `products`; mapper + request/response DTO riêng.
 
@@ -184,7 +184,7 @@ Schema MySQL hiện tại có **21 bảng**, dùng khóa ngoại và CHECK/UNIQU
 
 **Bất biến:** đơn hàng cũ vẫn tham chiếu sản phẩm; product INACTIVE không được gán cho slot/đơn mới. Tránh chỉ kiểm tra `existsBySku` trong Java; UNIQUE `(tenant_id, sku)` tại DB là lớp bảo vệ cuối cùng. **[CẦN CHỐT]** Sửa SKU có được phép hay không; thống nhất với API Specification cũ dùng PATCH.
 
-## 7. Machine Management — TASK-019 [ĐANG TRIỂN KHAI]
+## 7. Machine Management — TASK-019 [HIỆN CÓ — CHƯA XÁC NHẬN MERGE]
 
 `MachineController` → `MachineService` → `MachineRepository`; DTO create/update/response, `MachineMapper`.
 
@@ -204,9 +204,63 @@ Schema MySQL hiện tại có **21 bảng**, dùng khóa ngoại và CHECK/UNIQU
 | `PUT /api/v1/machines/{id}` | Chỉ trường cấu hình được cho phép; Location mới cùng tenant |
 | `DELETE /api/v1/machines/{id}` | Chuyển operationalStatus `DISABLED`, giữ slots và lịch sử |
 | `PATCH /api/v1/machines/{id}/status` | Kiểm tra chuyển trạng thái hợp lệ và role |
-| `PATCH /api/v1/machines/{id}/connection-status` | Chỉ luồng quản trị thiết bị/heartbeat đáng tin, không mở cho mọi role |
+| `PATCH /api/v1/machines/{id}/connection-status` | Platform/Tech chỉ được đặt OFFLINE; ONLINE thủ công bị từ chối 403 |
 
-**Đồng bộ trạng thái:** khi nhận heartbeat hợp lệ, cập nhật lastSeen và connection theo quy tắc chốt; khi timeout chuyển OFFLINE, không tự động bật ACTIVE. Việc sửa operationalStatus không được tự thay đổi connectionStatus. Machine DISABLED không nhận order/dispense mới.
+**Thiết kế IoT tương lai (chưa xác nhận triển khai):** khi nhận heartbeat hợp lệ, cập nhật lastPingAt và connection theo quy tắc chốt; khi timeout chuyển OFFLINE, không tự động bật ACTIVE. Việc sửa operationalStatus không được tự thay đổi connectionStatus. Machine DISABLED không nhận order/dispense mới.
+
+### 7.3 Thiết kế class và xử lý
+
+| Class | Trách nhiệm |
+|---|---|
+| MachineController | 7 REST routes, @PreAuthorize, @Valid DTO |
+| MachineService | @Transactional; getAll/getById readOnly; kiểm tra quyền, tenant, trạng thái và uniqueness |
+| MachineRepository | search theo tenant và filter; findWithLocationById / findWithLocationByIdAndTenantId; exists checks |
+| LocationRepository / TenantRepository | Xác minh location và tenant |
+| MachineMapper | Chuyển entity sang MachineResponse, nested LocationInfo |
+| CreateMachineRequest / UpdateMachineRequest | DTO cấu hình; giới hạn độ dài và validation |
+| CurrentUserService / CurrentUserPrincipal | Lấy principal, tenant và role |
+| GlobalExceptionHandler | Chuyển exception thành HTTP error + ApiResponse |
+
+```mermaid
+sequenceDiagram
+ participant C as Client
+ participant A as MachineController
+ participant S as MachineService
+ participant R as MachineRepository
+ C->>A: PATCH connection-status?status=OFFLINE
+ A->>A: RBAC
+ A->>S: updateConnectionStatus(id,status)
+ S->>S: Check role and normalize status
+ S->>R: Find machine within scope
+ alt Outside scope
+  S-->>C: 404
+ else ONLINE requested
+  S-->>C: 403
+ else OFFLINE
+  S->>R: save(machine)
+  S-->>A: MachineResponse
+  A-->>C: 200
+ end
+```
+
+### RBAC và quy tắc nghiệp vụ (đã triển khai)
+
+| Thao tác | PLATFORM_SUPER_ADMIN | BRAND_ADMIN | OPERATIONS_MANAGER | TECHNICIAN | INVENTORY_STAFF |
+|---|---|---|---|---|---|---|
+| GET list/detail | Global | Own | Own | Own | 403 |
+| POST / PUT / DELETE | Global | Own | 403 | 403 | 403 |
+| PATCH operational status | Global | Own | Own, giới hạn | Own, giới hạn | 403 |
+| PATCH connection OFFLINE | Global | 403 | 403 | Own | 403 |
+| PATCH connection ONLINE | 403 | 403 | 403 | 403 | 403 |
+
+- Global: toàn hệ thống; Own: tenant của principal. Controller kiểm tra role; Service kiểm tra lại role và phạm vi dữ liệu.
+- OPS/TECH không được đặt DISABLED hoặc thay đổi operational status của máy đã DISABLED. Admin có thể kích hoạt lại máy.
+- ONLINE không được thiết lập thủ công, kể cả PLATFORM_SUPER_ADMIN; cần xác nhận thiết bị trong luồng IoT tương lai. PATCH OFFLINE không sửa operationalStatus hay lastPingAt.
+- Tạo máy luôn OFFLINE; yêu cầu ONLINE bị từ chối 400. Operational mặc định ACTIVE; hai trạng thái độc lập.
+- Tenant admin không được tạo máy cho tenant khác (403); truy vấn máy/tenant khác trả 404. Platform phải cung cấp tenantId khi tạo; tenant phải ACTIVE. Location tùy chọn, nếu có phải ACTIVE và cùng tenant. Platform chọn location sai tenant: 400; tenant user chọn location ngoài scope: 404.
+- machineCode, serialNumber, deviceIdentity duy nhất toàn hệ thống; trùng hoặc vi phạm ràng buộc khi saveAndFlush trả 409. PUT chỉ sửa trường khác null, không đổi tenant hoặc trạng thái; locationId null không gỡ location. DELETE chỉ đặt DISABLED, không xóa bản ghi.
+
+Chi tiết API: [API Specification](api/api-specification.md#7-machine-and-slot-module). Kết quả test: [TASK-019](test-reports/test-report.md).
 
 ## 8. Machine Slot Management — TASK-020 [ĐANG TRIỂN KHAI]
 
@@ -820,7 +874,7 @@ flowchart TD
 | JWT / Spring Security | TASK-015 | `SecurityConfig`, `JwtAuthenticationFilter` | Có source |
 | RBAC | TASK-016 | `Role`, `CurrentUserService`, annotation | Có source |
 | User / Tenant | TASK-017 | `UserController`, `TenantController` và service | Có source |
-| Location / Product | TASK-018 | SRS + schema + nhánh chưa có trong ZIP | Chưa xác nhận merge |
+| Location / Product | TASK-018 | Source TASK-019 + Surefire 89/89 | Chưa xác nhận merge |
 | Machine | TASK-019 | SRS + schema + nhánh chưa có trong ZIP | Chưa xác nhận merge |
 | Machine Slot | TASK-020 | SRS + schema + nhánh chưa có trong ZIP | Chưa xác nhận merge |
 | Integration | TASK-021 | Test plan | Chưa xác nhận triển khai |
@@ -838,3 +892,97 @@ flowchart TD
 - Mọi thay đổi hợp đồng IoT/payment phải version hóa và cập nhật cả simulator lẫn backend.
 - Không tự ý đổi `database/schema.sql` chỉ để khớp ví dụ trong tài liệu; cần review migration riêng.
 - Bản này là **baseline theo ZIP đầu vào**; trạng thái có thể thay đổi sau khi nhóm merge các nhánh mới.
+
+
+# Đặc tả triển khai đã đối chiếu — quản lý danh mục và thiết bị
+
+Phần này ưu tiên khi ví dụ thiết kế trước đó khác với API hiện hành. Các module chưa có controller tương ứng vẫn là thiết kế, không phải API đã xác nhận chạy.
+
+## Location & Product Management
+
+## Implemented routes
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/v1/locations` | List locations; optional `status`, `name`, `tenantId` |
+| GET | `/api/v1/locations/{id}` | Location detail |
+| POST | `/api/v1/locations` | Create location |
+| PUT | `/api/v1/locations/{id}` | Update name, address, description |
+| DELETE | `/api/v1/locations/{id}` | Soft-delete (`status=INACTIVE`) |
+| GET | `/api/v1/products` | List products; optional `status`, `name`, `tenantId` |
+| GET | `/api/v1/products/{id}` | Product detail |
+| POST | `/api/v1/products` | Create product |
+| PUT | `/api/v1/products/{id}` | Update product details (SKU and tenant are immutable) |
+| DELETE | `/api/v1/products/{id}` | Soft-delete (`status=INACTIVE`) |
+
+## Authorization and tenant scope
+
+- `PLATFORM_SUPER_ADMIN`: can read/manage all tenants. When creating a Location or Product, `tenantId` is required in the body.
+- `BRAND_ADMIN`: can read/manage only the tenant ID embedded in the authenticated JWT principal. A body `tenantId` is ignored; a query `tenantId` that differs from the caller tenant is rejected as not found.
+- `OPERATIONS_MANAGER`, `TECHNICIAN`, and `INVENTORY_STAFF`: denied by default. The repository currently has no per-user permission/permission-grant model, so this task does not invent grants for those roles. Extend the service checks only after the team defines the permission source.
+- Tenant scope checks are repeated in the service layer; controller annotations are an additional RBAC boundary.
+
+## Delete protection
+
+- A Location cannot be deactivated while any Machine references it through `machines.location_id`.
+- A Product cannot be deactivated while any Machine Slot references it through `machine_slots.product_id`.
+- Product rows are never physically deleted. Order history keeps its product foreign-key reference and snapshots; setting the product to `INACTIVE` preserves that history.
+
+## Request examples
+
+Brand Admin creates a Location:
+
+```json
+{
+  "name": "District 1 Store",
+  "address": "123 Nguyen Hue, District 1, Ho Chi Minh City",
+  "description": "Retail location"
+}
+```
+
+Platform Super Admin creates a Product (tenantId is required for this role):
+
+```json
+{
+  "tenantId": 1,
+  "sku": "ROSE-001",
+  "name": "Rose Eau de Parfum",
+  "description": "Floral fragrance",
+  "fragranceNotes": "Rose, musk, vanilla",
+  "imageUrl": "https://example.com/rose.jpg",
+  "price": 150000.00,
+  "volumePerSprayMl": 0.10
+}
+```
+
+
+## Machine Management
+
+## Implemented routes
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/v1/machines` | List machines; optional `connectionStatus`, `operationalStatus`, `locationId`, `tenantId` |
+| GET | `/api/v1/machines/{id}` | Machine detail including nested Location info |
+| POST | `/api/v1/machines` | Register a new machine (defaults: `connectionStatus=OFFLINE`, `operationalStatus=ACTIVE`) |
+| PUT | `/api/v1/machines/{id}` | Update `machineCode`, `serialNumber`, `deviceIdentity`, `locationId`, `firmwareVersion` |
+| DELETE | `/api/v1/machines/{id}` | Soft-delete (`operationalStatus=DISABLED`) |
+| PATCH | `/api/v1/machines/{id}/status?status=MAINTENANCE` | Update `operationalStatus` independently (`ACTIVE`, `MAINTENANCE`, `DISABLED`, `ERROR`) |
+| PATCH | `/api/v1/machines/{id}/connection-status?status=OFFLINE` | Update `connectionStatus` independently (`ONLINE`, `OFFLINE`) |
+
+### RBAC và quy tắc nghiệp vụ (đã triển khai)
+
+| Thao tác | PLATFORM_SUPER_ADMIN | BRAND_ADMIN | OPERATIONS_MANAGER | TECHNICIAN | INVENTORY_STAFF |
+|---|---|---|---|---|---|---|
+| GET list/detail | Global | Own | Own | Own | 403 |
+| POST / PUT / DELETE | Global | Own | 403 | 403 | 403 |
+| PATCH operational status | Global | Own | Own, giới hạn | Own, giới hạn | 403 |
+| PATCH connection OFFLINE | Global | 403 | 403 | Own | 403 |
+| PATCH connection ONLINE | 403 | 403 | 403 | 403 | 403 |
+
+- Global: toàn hệ thống; Own: tenant của principal. Controller kiểm tra role; Service kiểm tra lại role và phạm vi dữ liệu.
+- OPS/TECH không được đặt DISABLED hoặc thay đổi operational status của máy đã DISABLED. Admin có thể kích hoạt lại máy.
+- ONLINE không được thiết lập thủ công, kể cả PLATFORM_SUPER_ADMIN; cần xác nhận thiết bị trong luồng IoT tương lai. PATCH OFFLINE không sửa operationalStatus hay lastPingAt.
+- Tạo máy luôn OFFLINE; yêu cầu ONLINE bị từ chối 400. Operational mặc định ACTIVE; hai trạng thái độc lập.
+- Tenant admin không được tạo máy cho tenant khác (403); truy vấn máy/tenant khác trả 404. Platform phải cung cấp tenantId khi tạo; tenant phải ACTIVE. Location tùy chọn, nếu có phải ACTIVE và cùng tenant. Platform chọn location sai tenant: 400; tenant user chọn location ngoài scope: 404.
+- machineCode, serialNumber, deviceIdentity duy nhất toàn hệ thống; trùng hoặc vi phạm ràng buộc khi saveAndFlush trả 409. PUT chỉ sửa trường khác null, không đổi tenant hoặc trạng thái; locationId null không gỡ location. DELETE chỉ đặt DISABLED, không xóa bản ghi.

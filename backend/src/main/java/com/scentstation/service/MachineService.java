@@ -19,7 +19,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -106,12 +105,10 @@ public class MachineService {
 
         // Mặc định OFFLINE nếu chưa có xác nhận kết nối thực tế
         String connectionStatus = normalizeAndValidateConnectionStatus(request.connectionStatus(), false);
-        if (connectionStatus == null) {
-            connectionStatus = "OFFLINE";
+        if ("ONLINE".equals(connectionStatus)) {
+            throw new IllegalArgumentException("New machines must be registered as OFFLINE");
         }
-        if ("ONLINE".equals(connectionStatus) && !current.isPlatformSuperAdmin()) {
-            throw new AccessDeniedException("Regular users cannot register a machine directly as ONLINE");
-        }
+        connectionStatus = "OFFLINE";
 
         // Mặc định ACTIVE nếu không chỉ định
         String operationalStatus = normalizeAndValidateOperationalStatus(request.operationalStatus(), false);
@@ -128,15 +125,12 @@ public class MachineService {
         machine.setFirmwareVersion(blankToNull(request.firmwareVersion()));
         machine.setConnectionStatus(connectionStatus);
         machine.setOperationalStatus(operationalStatus);
-        if ("ONLINE".equals(connectionStatus)) {
-            machine.setLastPingAt(LocalDateTime.now());
-        }
 
         try {
-            Machine saved = machineRepository.save(machine);
+            Machine saved = machineRepository.saveAndFlush(machine);
             return machineMapper.toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
-            throw new ResourceConflictException("Machine code, serial number, or device identity already exists");
+            throw new ResourceConflictException("Machine data conflicts with an existing record or database constraint");
         }
     }
 
@@ -190,10 +184,10 @@ public class MachineService {
         }
 
         try {
-            Machine saved = machineRepository.save(machine);
+            Machine saved = machineRepository.saveAndFlush(machine);
             return machineMapper.toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
-            throw new ResourceConflictException("Machine code, serial number, or device identity already exists");
+            throw new ResourceConflictException("Machine data conflicts with an existing record or database constraint");
         }
     }
 
@@ -215,6 +209,19 @@ public class MachineService {
         String normalizedStatus = normalizeAndValidateOperationalStatus(status, true);
         Machine machine = findAccessibleMachine(id, current);
 
+        boolean isAdmin = current.isPlatformSuperAdmin()
+            || current.hasRole("BRAND_ADMIN");
+        // Chỉ Admin được phép vô hiệu hóa máy
+        if ("DISABLED".equals(normalizedStatus) && !isAdmin) {
+            throw new AccessDeniedException(
+                    "Only administrators can disable machines");
+        }
+         // Chỉ Admin được phép thay đổi trạng thái máy đã bị vô hiệu hóa
+        if ("DISABLED".equals(machine.getOperationalStatus()) && !isAdmin) {
+            throw new AccessDeniedException(
+                    "Only administrators can change the status of disabled machines");
+        }
+        
         machine.setOperationalStatus(normalizedStatus);
         Machine saved = machineRepository.save(machine);
         return machineMapper.toResponse(saved);
@@ -228,10 +235,12 @@ public class MachineService {
         String normalizedStatus = normalizeAndValidateConnectionStatus(status, true);
         Machine machine = findAccessibleMachine(id, current);
 
-        machine.setConnectionStatus(normalizedStatus);
         if ("ONLINE".equals(normalizedStatus)) {
-            machine.setLastPingAt(LocalDateTime.now());
+            throw new AccessDeniedException(
+                "ONLINE status must be confirmed by the device");
         }
+        machine.setConnectionStatus(normalizedStatus);
+
         Machine saved = machineRepository.save(machine);
         return machineMapper.toResponse(saved);
     }
