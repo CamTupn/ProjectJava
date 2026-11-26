@@ -26,3 +26,19 @@ JUnit/Mockito cho nghiệp vụ, MockMvc cho hợp đồng HTTP và RBAC; integr
 ## 3. Điều kiện hoàn thành
 
 Mỗi module cần test nghiệp vụ, phân quyền, dữ liệu biên và lỗi; regression không có failure/error; kiểm thử tích hợp có bằng chứng riêng. Các kịch bản trên là kế hoạch, không phải kết quả đã chạy. Xem [báo cáo chung](test-report.md).
+
+## 4. Kiểm thử chi tiết quản lý khe
+
+| Nhóm | Kịch bản | Kỳ vọng |
+|---|---|---|
+| Volume | capacity=0, volume âm/vượt capacity, threshold âm/vượt capacity | 400; không ghi dữ liệu |
+| Product | khác tenant, inactive, null khi tồn dương | 404/409/400 |
+| Configuration | đổi/gỡ product khi còn tồn; đổi khi hết tồn; trùng số khe | 409 hoặc thành công hợp lệ |
+| Status | EMPTY, LOW_STOCK, AVAILABLE, ERROR, DISABLED | Tính đúng; giữ ERROR khi PUT; DELETE idempotent |
+| Tenant | list/create/detail/update/PATCH/delete khác tenant | 404; không ghi dữ liệu |
+| RBAC | 5 role x 6 route; thiếu authentication | 30 trường hợp role; 6 trường hợp 401 |
+| Inventory | tồn ban đầu dương, bằng 0, disable khi còn tồn | ADJUSTMENT đúng user/volume; không ghi thừa; 409 |
+| Integration (chưa xác nhận) | MySQL thật, rollback khi insert transaction lỗi, tạo khe trùng đồng thời, JWT thật | Không mất tồn, không ghi dở dang, không lộ tenant |
+| E2E (giai đoạn sau) | Kiosk/order/dispense với slot DISABLED/ERROR/EMPTY | Không cho phun hoặc tạo giao dịch không hợp lệ |
+
+Chạy regression chung một lần sau khi hoàn thiện source. Không cần lặp lại toàn bộ Postman chỉ để chứng minh các mock test đã PASS; bằng chứng tích hợp vẫn được theo dõi riêng.

@@ -223,3 +223,85 @@ Ngày ghi nhận: 26/11/2026. Nguồn: Surefire XML trong bản source review; k
 
 
 Location/Product chưa có test class riêng trong báo cáo XML này; không suy ra PASS từ kết quả regression. Các module kiosk, payment, dispensing, MQTT, inventory và maintenance chưa có bằng chứng kiểm thử trong bộ XML.
+
+## Kiểm thử quản lý khe và regression sau tích hợp
+
+Ngày 27/11/2026 00:18:48 +07:00, Windows PowerShell, `./mvnw.cmd clean test` (trên Windows: `.\mvnw.cmd clean test`). Nhánh fix/task-020-machine-slot-management. Kết quả từ ảnh terminal do nhóm cung cấp: BUILD SUCCESS, 45.547 s, 229 tests, 0 failures, 0 errors, 0 skipped. PR #64 gốc đã merge; bản sửa chưa merge tại thời điểm báo cáo.
+
+| Bộ test | Số lượt | Failure | Error | Skipped |
+|---|---:|---:|---:|---:|
+| MachineSlotServiceTest | 42 | 0 | 0 | 0 |
+| MachineSlotControllerTest | 4 | 0 | 0 | 0 |
+| MachineSlotControllerSecurityTest | 48 | 0 | 0 | 0 |
+| Các module trước | 135 | 0 | 0 | 0 |
+| Tổng | 229 | 0 | 0 | 0 |
+
+Phân rã dựa trên source và tổng kết Maven; không có Surefire XML trong ZIP.
+
+### Danh mục Service Test
+
+| ID | Method | Kết quả theo regression |
+|---|---|---|
+| MS-S-01 | `createSlotCalculatesEmptyStatusAndStoresInitialVolume` | PASS |
+| MS-S-02 | `createSlotRecordsNonZeroInitialVolumeAsInventoryAdjustment` | PASS |
+| MS-S-03 | `createSlotRejectsProductFromAnotherTenant` | PASS |
+| MS-S-04 | `createSlotRejectsDuplicateSlotNumber` | PASS |
+| MS-S-05 | `createSlotRejectsThresholdAboveCapacity` | PASS |
+| MS-S-06 | `updateSlotDoesNotAllowCapacityBelowCurrentVolume` | PASS |
+| MS-S-07 | `updateSlotPreservesCurrentVolumeAndRecalculatesStatus` | PASS |
+| MS-S-08 | `disableSlotRefusesToDiscardRemainingInventory` | PASS |
+| MS-S-09 | `disableSlotSoftDisablesAnEmptySlot` | PASS |
+| MS-S-10 | `updateSlotStatusRecalculatesInventoryStatuses` | PASS |
+| MS-S-11 | `listSlotsRejectsCrossTenantProductReference` | PASS |
+| MS-S-12 | `tenantCannotReadAnotherTenantsSlot` | PASS |
+| MS-S-13 | `createSlotRejectsPositiveInventoryWithoutProduct` | PASS |
+| MS-S-14 | `createSlotRejectsInactiveProduct` | PASS |
+| MS-S-15 | `updateSlotRejectsProductChangeWhileInventoryRemains` | PASS |
+| MS-S-16 | `updateSlotRejectsProductRemovalWhileInventoryRemains` | PASS |
+| MS-S-17 | `updateSlotAllowsProductChangeWhenEmpty` | PASS |
+| MS-S-18 | `createSlotRejectsDisabledMachine` | PASS |
+| MS-S-19 | `updateSlotRejectsDisabledMachine` | PASS |
+| MS-S-20 | `updateSlotStatusRejectsDisabledMachine` | PASS |
+| MS-S-21 | `createSlotRejectsNegativeThreshold` | PASS |
+| MS-S-22 | `createSlotRejectsZeroCapacity` | PASS |
+| MS-S-23 | `createSlotRejectsNegativeCurrentVolume` | PASS |
+| MS-S-24 | `createSlotRejectsCurrentVolumeAboveCapacity` | PASS |
+| MS-S-25 | `updateSlotPreservesErrorStatus` | PASS |
+| MS-S-26 | `updateSlotRejectsDisabledSlot` | PASS |
+| MS-S-27 | `updateSlotStatusRejectsDisabledSlot` | PASS |
+| MS-S-28 | `disableSlotIsIdempotent` | PASS |
+| MS-S-29 | `updateSlotStatusRejectsInvalidStatus` | PASS |
+| MS-S-30 | `tenantCannotCreateSlotOnAnotherTenantsMachine` | PASS |
+| MS-S-31 | `tenantCannotListSlotsOfAnotherTenantsMachine` | PASS |
+| MS-S-32 | `tenantCannotUpdateAnotherTenantsSlot` | PASS |
+| MS-S-33 | `tenantCannotUpdateAnotherTenantsSlotStatus` | PASS |
+| MS-S-34 | `tenantCannotDisableAnotherTenantsSlot` | PASS |
+| MS-S-35 | `updateSlotRejectsProductFromAnotherTenant` | PASS |
+| MS-S-36 | `superAdminCanReadSlotFromAnotherTenant` | PASS |
+| MS-S-37 | `superAdminCannotAssignProductFromDifferentTenant` | PASS |
+| MS-S-38 | `technicianCannotCreateSlot` | PASS |
+| MS-S-39 | `technicianCannotUpdateSlotConfiguration` | PASS |
+| MS-S-40 | `technicianCannotDisableSlot` | PASS |
+| MS-S-41 | `inventoryStaffCannotDisableSlot` | PASS |
+| MS-S-42 | `inventoryStaffCannotUpdateSlotStatus` | PASS |
+
+### Controller và Security
+
+| Nhóm | Lượt | Kết quả |
+|---|---:|---|
+| Controller response/validation | 4 | PASS |
+| RBAC theo 6 endpoint | 30 | PASS |
+| Unauthenticated | 6 | PASS |
+| ResourceNotFound mapping | 6 | PASS |
+| Conflict mapping | 3 | PASS |
+| Bad request | 2 | PASS |
+| Access denied mapping | 1 | PASS |
+
+| Thao tác | Super Admin | Brand Admin | Operations | Technician | Inventory |
+|---|---|---|---|---|---|
+| List/detail | Global | Own | Own | Own | Own |
+| Create/update | Global | Own | Own | 403 | Own |
+| PATCH status | Global | Own | Own | Own | 403 |
+| DELETE | Global | Own | Own | 403 | 403 |
+
+Giới hạn: Mockito mock repository và service; MockMvc security không chứng minh JWT thật hoặc truy vấn DB thật. Các test mapping 404/409 dùng exception giả lập; kiểm tra tenant nghiệp vụ nằm ở service tests. Chưa có ảnh Postman TASK-020 hoặc bằng chứng rollback/concurrency MySQL trong ZIP; không đánh dấu các kiểm thử đó PASS. Không có số liệu JaCoCo.

@@ -1049,3 +1049,9 @@ Trong phần mô tả Issue, ghi:
 ## 9.4. Trạng thái tài liệu
 
 Tài liệu này là **bản nháp SRS 1.1 để nhóm review**. Sau khi thống nhất yêu cầu và các lựa chọn kỹ thuật còn mở, nhóm có thể chốt bản baseline rồi tiếp tục `system-specification.md`, Use Case Diagram, ERD, API specification và test plan.
+
+## Đối chiếu triển khai quản lý khe
+
+SRS-MACH-002: CRUD cấu hình, đọc tồn, trạng thái, soft delete và tenant isolation đã có trong backend Machine Slot. SRS-INV-001/002/003: mới xác nhận ghi ADJUSTMENT tồn ban đầu và bảo toàn tồn khi chỉnh cấu hình; các workflow refill, dispense, removal và đối soát vẫn cần nghiệm thu riêng. Điều kiện sẵn sàng của kiosk/order chưa được xác nhận bởi test CRUD.
+
+Lưu ý truy vết: TASK-020 trong bảng kế hoạch SRS ban đầu là kiểm thử E2E; TASK-020 trong nhánh triển khai hiện tại là Machine Slot Management (PR #64). Giữ nguyên mã lịch sử của kế hoạch SRS để tránh tự ý đổi các liên kết yêu cầu; dùng tên công việc kèm mã khi đối chiếu.
