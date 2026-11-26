@@ -149,8 +149,12 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 | Machines | POST | `/machines` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER |
 | Machines | GET | `/machines/{machineId}` | Scoped |
 | Machines | PATCH | `/machines/{machineId}` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER |
-| Machines | GET | `/machines/{machineId}/slots` | Scoped |
-| Slots | PATCH | `/machines/{machineId}/slots/{slotId}` | BRAND_ADMIN / OPERATIONS_MANAGER / INVENTORY_STAFF / TECHNICIAN |
+| Slots | GET | `/machines/{machineId}/slots` | All scoped machine-slot roles |
+| Slots | POST | `/machines/{machineId}/slots` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER / INVENTORY_STAFF |
+| Slots | GET | `/machine-slots/{id}` | All scoped machine-slot roles |
+| Slots | PUT | `/machine-slots/{id}` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER / INVENTORY_STAFF |
+| Slots | PATCH | `/machine-slots/{id}/status` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER / TECHNICIAN |
+| Slots | DELETE | `/machine-slots/{id}` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN / OPERATIONS_MANAGER |
 | Customer Catalog | GET | `/kiosks/{machineId}/products` | Public |
 | Orders | POST | `/orders` | PUBLIC_KIOSK |
 | Orders | GET | `/orders/{orderId}` | PUBLIC_KIOSK / scoped staff |
@@ -713,58 +717,99 @@ Không cam kết mã lỗi dạng string riêng. Trường errors có thể ch�
 
 ```json
 {
-  "success": true,
-  "data": {
-    "machineId": "machine_001",
-    "slots": [
-      {
-        "id": "slot_001",
-        "slotCode": "SLOT-01",
-        "productId": "prod_001",
-        "capacityMl": "100.00",
-        "currentVolumeMl": "85.00",
-        "lowStockThresholdMl": "20.00",
-        "status": "AVAILABLE"
-      }
-    ]
-  }
+  "machineId": 1,
+  "totalSlots": 1,
+  "slots": [
+    {
+      "id": 1,
+      "slotNumber": 1,
+      "productId": 10,
+      "productName": "Fragrance A",
+      "capacityMl": 100.00,
+      "currentVolumeMl": 85.00,
+      "lowStockThresholdMl": 20.00,
+      "status": "AVAILABLE",
+      "createdAt": "2026-11-16T12:00:00",
+      "updatedAt": "2026-11-16T12:00:00"
+    }
+  ]
 }
 ```
 
 ---
 
-## 7.6 Update Slot
+## 7.6 Create Machine Slot
 
-### `PATCH /api/v1/machines/{machineId}/slots/{slotId}`
+### `POST /api/v1/machines/{machineId}/slots`
 
-**Access:** `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `INVENTORY_STAFF`, `TECHNICIAN`
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `INVENTORY_STAFF`
 
 ### Request
 
 ```json
 {
-  "productId": "prod_001",
-  "capacityMl": "100.00",
-  "currentVolumeMl": "85.00",
-  "lowStockThresholdMl": "20.00",
-  "status": "AVAILABLE"
+  "slotNumber": 1,
+  "productId": 10,
+  "capacityMl": 100.00,
+  "currentVolumeMl": 85.00,
+  "lowStockThresholdMl": 20.00
 }
 ```
 
-### Validation
+### Validation and errors
 
-- `slotId` must belong to `machineId`.
-- Product must exist and belong to the same tenant.
-- The selected product must belong to the same tenant as the machine.
-- A slot must not be marked ready if the machine is under maintenance or has a critical fault.
+- Machine must exist and be within the caller's tenant scope.
+- `slotNumber` must be positive and unique within the machine.
+- `capacityMl` must be positive; current volume and threshold must be non-negative and no greater than capacity.
+- Product is optional; when provided, it must belong to the same tenant as the machine.
+- Initial status is calculated from current volume and threshold.
+- A non-zero initial volume is recorded atomically as an `ADJUSTMENT` inventory transaction with the creating user.
+- `400` for invalid values, `404` for inaccessible/missing machine or product, and `409` for duplicate slot number.
 
-### Errors
+## 7.7 Get Machine Slot
 
-- `400 VALIDATION_ERROR`
-- `403 TENANT_ACCESS_DENIED`
-- `404 MACHINE_NOT_FOUND`
-- `404 SLOT_NOT_FOUND`
-- `409 SLOT_NOT_AVAILABLE`
+### `GET /api/v1/machine-slots/{id}`
+
+**Access:** all five machine-slot roles listed in section 7.5. Resources outside the caller's tenant scope return `404`.
+
+## 7.8 Update Machine Slot Configuration
+
+### `PUT /api/v1/machine-slots/{id}`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `INVENTORY_STAFF`
+
+```json
+{
+  "slotNumber": 1,
+  "productId": 10,
+  "capacityMl": 100.00,
+  "lowStockThresholdMl": 20.00
+}
+```
+
+The request replaces the slot configuration. Set `productId` to `null` to unassign the product. `machineId`, tenant, and `currentVolumeMl` are not updateable through this endpoint. Capacity cannot be reduced below current volume. Existing `ERROR` remains until explicitly cleared through the status endpoint. A disabled slot cannot be updated.
+
+## 7.9 Update Machine Slot Status
+
+### `PATCH /api/v1/machine-slots/{id}/status`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `TECHNICIAN`
+
+```json
+{
+  "status": "ERROR"
+}
+```
+
+`ERROR` can be set explicitly. Sending `AVAILABLE`, `LOW_STOCK`, or `EMPTY` clears an existing error and the actual status is recalculated from volume and threshold. `DISABLED` is only set through the delete endpoint.
+
+## 7.10 Disable Machine Slot (Soft Delete)
+
+### `DELETE /api/v1/machine-slots/{id}`
+
+**Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`
+
+Sets status to `DISABLED`; the row and inventory history are retained. The request returns `409` while `currentVolumeMl` is greater than zero, until inventory is handled through the inventory-removal workflow.
 
 ---
 
@@ -2217,7 +2262,7 @@ The following endpoint groups are included in this contract proposal. A module d
 | Users/roles | `GET/POST /users`, `PATCH /users/{userId}`, `GET /roles` |
 | Locations | `GET/POST /locations`, `PATCH /locations/{locationId}` |
 | Products | `GET/POST /products`, `GET/PATCH /products/{productId}`, deactivate via `PATCH status=INACTIVE` preferred |
-| Machines/slots | `GET/POST /machines`, `GET/PATCH /machines/{machineId}`, `GET/PATCH /machines/{machineId}/slots/{slotId}` |
+| Machines/slots | `GET/POST /machines`, `GET/PATCH /machines/{machineId}`, `GET/POST /machines/{machineId}/slots`, `GET/PUT/PATCH/DELETE /machine-slots/{id}` |
 | Kiosk/order | `GET /kiosks/{machineId}/products`, `POST /orders`, `GET /orders`, `GET /orders/{orderId}`, `POST /orders/{orderId}/cancel` |
 | Payments | `POST /orders/{orderId}/payment-sessions`, provider callback, `GET /orders/{orderId}/payments` |
 | Dispensing | Internal customer command flow, `GET /orders/{orderId}/dispensing`, diagnostic spray, authenticated MQTT result events |
