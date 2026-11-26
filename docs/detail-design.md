@@ -451,7 +451,7 @@ Simulator hỗ trợ online/offline, heartbeat, success, failure, duplicate ACK,
 
 | Task | Chức năng | Trạng thái theo nguồn hiện có | Phụ thuộc chính |
 |---|---|---|---|
-| 014 | Register/Login | Có code, đã review trước đó | users/roles |
+| 014 | Cấp tài khoản/Login | Register công khai được thay thế tại TASK-021 | users/roles |
 | 015 | JWT/Security | Có code, đã review trước đó | 014 |
 | 016 | RBAC | Có code, đã review trước đó | 015 |
 | 017 | User/Tenant | Có code, đã review trước đó | 016 |
@@ -513,7 +513,7 @@ Phần II bổ sung bằng chứng kiểm tra source cho các phần thiết k�
 | `Tenant` | `backend/src/main/java/com/scentstation/entity/Tenant.java` | entity |
 | `User` | `backend/src/main/java/com/scentstation/entity/User.java` | entity |
 | `LoginRequest` | `backend/src/main/java/com/scentstation/dto/request/LoginRequest.java` | dto → request |
-| `RegisterRequest` | `backend/src/main/java/com/scentstation/dto/request/RegisterRequest.java` | dto → request |
+| `CreateUserRequest`, `CreateTenantRequest` | `backend/src/main/java/com/scentstation/dto/request/` | DTO cấp tài khoản và tenant; RegisterRequest đã xóa |
 | `UpdateTenantRequest` | `backend/src/main/java/com/scentstation/dto/request/UpdateTenantRequest.java` | dto → request |
 | `UpdateUserRequest` | `backend/src/main/java/com/scentstation/dto/request/UpdateUserRequest.java` | dto → request |
 | `AuthResponse` | `backend/src/main/java/com/scentstation/dto/response/AuthResponse.java` | dto → response |
@@ -1049,4 +1049,39 @@ Platform Super Admin creates a Product (tenantId is required for this role):
 
 ## TASK-021 — Thiết kế kiểm thử tích hợp database
 
-`com.scentstation.integration.DatabaseIntegrationTest` sử dụng `@SpringBootTest`, `@ActiveProfiles("integration")`, `@EnabledIfEnvironmentVariable(named="RUN_INTEGRATION_TESTS", matches="true")` và JdbcTemplate thật. Các method `applicationContextShouldLoad`, `shouldConnectToTestDatabase`, `shouldContainAllRequiredTables`, `shouldConnectToMySqlServer` kiểm tra context, schema đang dùng, số bảng và truy vấn cơ bản. Không ghi dữ liệu. Profile riêng nằm ở test resources, không sửa production configuration. Hibernate validate không chứng minh toàn bộ FK/index hoặc nghiệp vụ liên module. Kết quả 4/4 trong regression 233/233; xem test-report.md.
+`com.scentstation.integration.DatabaseIntegrationTest` sử dụng `@SpringBootTest`, `@ActiveProfiles("integration")`, `@EnabledIfEnvironmentVariable(named="RUN_INTEGRATION_TESTS", matches="true")` và JdbcTemplate thật. Các method `applicationContextShouldLoad`, `shouldConnectToTestDatabase`, `shouldContainAllRequiredTables`, `shouldConnectToMySqlServer` kiểm tra context, schema đang dùng, số bảng và truy vấn cơ bản. Không ghi dữ liệu. Profile riêng nằm ở test resources, không sửa production configuration. Hibernate validate không chứng minh toàn bộ FK/index hoặc nghiệp vụ liên module. Kết quả 4/4 trong regression cuối 341/341; xem test-report.md.
+
+## TASK-021 — Chính sách cấp tài khoản (27/11/2026)
+
+Thay đổi phạm vi TASK-014/015: không tự đăng ký công khai; `RegisterRequest` đã xóa, `/api/v1/auth/register` không có controller và không còn public. Platform Super Admin được khởi tạo ngoài API cấp tài khoản. Platform Super Admin tạo tenant và cấp Brand Admin hoặc nhân viên cho tenant ACTIVE; Brand Admin chỉ cấp Operations Manager, Technician, Inventory Staff trong tenant của mình. Không role nào được tạo Platform Super Admin qua API. Login vẫn public, JWT bắt buộc cho API quản lý. Đây là thay đổi yêu cầu cần được nhóm xác nhận khi nghiệm thu, không phải hoàn thành Register theo issue cũ.
+
+- `POST /api/v1/tenants`: name bắt buộc tối đa 150, code bắt buộc tối đa 50, chỉ chữ ASCII, số, `_`, `-`; trim name, uppercase code (Locale.ROOT); code duy nhất; ACTIVE mặc định; saveAndFlush, lỗi constraint 409.
+- `POST /api/v1/users`: username 3–100 ký tự ASCII chữ/số/`_.-`, email hợp lệ tối đa 255, fullName tối đa 150, password 8–72 ký tự và tối đa 72 byte UTF-8, roleCode bắt buộc tối đa 50. Username/email trim và lowercase, role uppercase, fullName trim. Platform phải truyền tenantId; Brand Admin lấy tenant từ principal, tenantId khác bị 403. Tenant không tồn tại 404, INACTIVE 409. Username/email trùng 409; role không hợp lệ 400, role hợp lệ nhưng thiếu trong DB 404. BCrypt encode trước saveAndFlush; gán đúng một role từ DB, ACTIVE mặc định; lỗi constraint 409. Response không có passwordHash.
+- GET user/tenant: Platform toàn hệ thống, Brand Admin trong tenant; ngoài scope 404. PUT user chỉ fullName/email; PATCH status ACTIVE/LOCKED/INACTIVE; Brand Admin không sửa tài khoản quản trị, không tự khóa/vô hiệu hóa. PUT tenant cập nhật name/code, Brand Admin chỉ tenant mình. Không có API đổi role hay xóa tenant trong phạm vi này.
+
+### Thiết kế lớp và luồng
+
+TenantController → TenantService → TenantRepository → TenantMapper → TenantResponse. UserController → UserService → CurrentUserService, TenantRepository, RoleRepository, UserRepository, PasswordEncoder, UserMapper → UserResponse. Hai service transactional; saveAndFlush giúp phát hiện lỗi constraint trong service. AuthController → AuthService → UserRepository/PasswordEncoder/JwtService → ApiResponse<AuthResponse>. Login tra username trước email, kiểm tra ACTIVE của user và tenant, BCrypt matches, sinh JWT chứa userId, fullName, tenantId, tenantCode, roles. Filter kiểm tra lại trạng thái và quyền từ DB.
+
+```mermaid
+sequenceDiagram
+ participant A as Platform Admin
+ participant T as Tenant API
+ participant U as User API
+ participant D as MySQL
+ participant B as Brand Admin
+ participant L as Auth API
+ A->>T: POST tenants + JWT
+ T->>D: saveAndFlush ACTIVE tenant
+ T-->>A: 201 TenantResponse
+ A->>U: POST users + JWT + tenantId
+ U->>D: validate tenant/role, BCrypt, saveAndFlush
+ U-->>A: 201 UserResponse
+ B->>L: POST login
+ L->>D: lookup user, roles, tenant
+ L-->>B: 200 accessToken
+ B->>U: POST users + JWT (employee)
+ U-->>B: 201 UserResponse
+```
+
+Integration: 4 database + 21 authentication + 14 business flow, MockMvc và MySQL thật, rollback fixture. 341 regression PASS; không chứng minh E2E mạng hoặc concurrency.

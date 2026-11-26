@@ -1,7 +1,7 @@
 # ScentStation — System Architecture
 
-**Tài liệu:** Kiến trúc hệ thống mức tổng thể  
-**Phiên bản:** 0.1  
+**Tài liệu:** Kiến trúc hệ thống mức tổng thể
+**Phiên bản:** 0.1
 **Trạng thái:** Bản đề xuất để nhóm review và thống nhất
 
 ## 1. Mục đích
@@ -286,3 +286,9 @@ MachineSlotController → MachineSlotService (@Transactional) → MachineSlotRep
 ## TASK-021 — Cách ly môi trường kiểm thử
 
 Integration profile → Spring context → Hibernate/JdbcTemplate → MySQL 8.0.42 / scentstation_test. Tài khoản test riêng chỉ được cấp DML trên schema test; không cấp quyền DDL. Cấu hình bí mật qua biến môi trường. Kiểm thử opt-in để không bắt buộc MySQL cho mọi lần chạy unit test. Bốn test đọc dữ liệu đã PASS; kiểm thử transaction ghi và JWT HTTP thật không thuộc bằng chứng này.
+
+## TASK-021 — Chính sách cấp tài khoản (27/11/2026)
+
+Thay đổi phạm vi TASK-014/015: không tự đăng ký công khai; `RegisterRequest` đã xóa, `/api/v1/auth/register` không có controller và không còn public. Platform Super Admin được khởi tạo ngoài API cấp tài khoản. Platform Super Admin tạo tenant và cấp Brand Admin hoặc nhân viên cho tenant ACTIVE; Brand Admin chỉ cấp Operations Manager, Technician, Inventory Staff trong tenant của mình. Không role nào được tạo Platform Super Admin qua API. Login vẫn public, JWT bắt buộc cho API quản lý. Đây là thay đổi yêu cầu cần được nhóm xác nhận khi nghiệm thu, không phải hoàn thành Register theo issue cũ.
+
+SecurityConfig → JwtAuthenticationFilter → Controller @PreAuthorize → Service tenant/role checks → Repository/MySQL. Public login/health và OPTIONS; không public register. JWT không thay thế kiểm tra trạng thái user/tenant hiện tại. Test profile độc lập, MockMvc không mở cổng HTTP, JDBC thật; 35 test authentication/business ghi trong transaction rollback, 4 test database đọc. Mốc cuối 341/341.

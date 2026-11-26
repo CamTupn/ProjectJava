@@ -53,4 +53,62 @@ Chạy regression chung một lần sau khi hoàn thiện source. Không cần l
 | IT-DB-003 | Đếm base table | 21 |
 | IT-DB-004 | SELECT 1 | 1 |
 
-Chạy opt-in theo README. Regression bao gồm 229 test hiện có và 4 test database. Kiểm tra lại bằng chứng Postman cũ trước khi bổ sung test; chỉ bổ sung luồng Register/Login/JWT hoặc Tenant/Location/Machine/Product/Slot nếu chưa có bằng chứng. Không đánh đồng mock test với E2E. Báo cáo chi tiết nằm trong test-report.md.
+Chạy opt-in theo README. Regression cuối gồm 341 test, trong đó 39 integration. Đối chiếu Postman cũ; thay luồng Register bằng cấp tài khoản có kiểm soát. Không đánh đồng mock test với E2E. Báo cáo chi tiết nằm trong test-report.md.
+
+## Kịch bản tích hợp cuối
+
+Chuẩn bị schema test 21 bảng và seed 5 role; bật biến môi trường theo README. Authentication/BusinessFlow dùng MockMvc, JWT thật, fixture UUID, transaction rollback. Kiểm tra DB đúng trước ghi. Kỳ vọng toàn bộ assertion thành công; tên method dưới đây là định danh kịch bản, kết quả thực tế xem test-report.
+
+### DatabaseIntegrationTest
+
+| ID | Method | Kỳ vọng |
+|---|---|---|
+| DAT-01 | `applicationContextShouldLoad` | Assertion thành công |
+| DAT-02 | `shouldConnectToTestDatabase` | Assertion thành công |
+| DAT-03 | `shouldContainAllRequiredTables` | Assertion thành công |
+| DAT-04 | `shouldConnectToMySqlServer` | Assertion thành công |
+
+### AuthenticationIntegrationTest
+
+| ID | Method | Kỳ vọng |
+|---|---|---|
+| AUT-01 | `shouldLoginWithUsername` | Assertion thành công |
+| AUT-02 | `shouldLoginWithEmail` | Assertion thành công |
+| AUT-03 | `shouldRejectIncorrectPassword` | Assertion thành công |
+| AUT-04 | `shouldRejectUnknownUser` | Assertion thành công |
+| AUT-05 | `shouldRejectInvalidLoginRequest` | Assertion thành công |
+| AUT-06 | `validJwtShouldAccessProtectedApi` | Assertion thành công |
+| AUT-07 | `missingJwtShouldReturn401` | Assertion thành công |
+| AUT-08 | `invalidJwtShouldReturn401` | Assertion thành công |
+| AUT-09 | `tamperedJwtShouldReturn401` | Assertion thành công |
+| AUT-10 | `shouldCreateTenantAndBrandAdminThenLogin` | Assertion thành công |
+| AUT-11 | `createdUserPasswordShouldBeHashedWithBCrypt` | Assertion thành công |
+| AUT-12 | `brandAdminShouldCreateEmployeeInOwnTenant` | Assertion thành công |
+| AUT-13 | `shouldRejectDuplicateEmail` | Assertion thành công |
+| AUT-14 | `shouldRejectDuplicateUsername` | Assertion thành công |
+| AUT-15 | `technicianShouldNotAccessUserManagement` | Assertion thành công |
+| AUT-16 | `brandAdminShouldNotCreatePlatformSuperAdmin` | Assertion thành công |
+| AUT-17 | `brandAdminShouldNotReadAnotherTenantUser` | Assertion thành công |
+| AUT-18 | `lockedUserShouldNotLogin` | Assertion thành công |
+| AUT-19 | `lockedUserExistingJwtShouldBeRejected` | Assertion thành công |
+| AUT-20 | `brandAdminShouldNotCreateTenant` | Assertion thành công |
+| AUT-21 | `publicRegistrationShouldNotBeAllowed` | Assertion thành công |
+
+### BusinessFlowIntegrationTest
+
+| ID | Method | Kỳ vọng |
+|---|---|---|
+| BUS-01 | `shouldCompleteBusinessConfigurationFlow` | Assertion thành công |
+| BUS-02 | `shouldRecordInitialInventoryTransaction` | Assertion thành công |
+| BUS-03 | `shouldRejectCrossTenantLocationAccess` | Assertion thành công |
+| BUS-04 | `shouldRejectCrossTenantProductAccess` | Assertion thành công |
+| BUS-05 | `shouldRejectCrossTenantMachineAccess` | Assertion thành công |
+| BUS-06 | `shouldRejectCrossTenantSlotAccess` | Assertion thành công |
+| BUS-07 | `shouldRejectProductAssignmentFromAnotherTenant` | Assertion thành công |
+| BUS-08 | `shouldRejectDuplicateSlotNumber` | Assertion thành công |
+| BUS-09 | `technicianShouldReadButNotCreateMachineSlot` | Assertion thành công |
+| BUS-10 | `inventoryStaffShouldCreateSlotButNotDisableIt` | Assertion thành công |
+| BUS-11 | `shouldRejectDisablingSlotWithRemainingInventory` | Assertion thành công |
+| BUS-12 | `shouldSoftDisableEmptySlot` | Assertion thành công |
+| BUS-13 | `platformAdminShouldReadResourcesAcrossTenants` | Assertion thành công |
+| BUS-14 | `protectedBusinessEndpointsShouldRequireJwt` | Assertion thành công |

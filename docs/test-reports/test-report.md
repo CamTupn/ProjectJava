@@ -307,7 +307,7 @@ Phân rã dựa trên source và tổng kết Maven; không có Surefire XML tro
 Giới hạn: Mockito mock repository và service; MockMvc security không chứng minh JWT thật hoặc truy vấn DB thật. Các test mapping 404/409 dùng exception giả lập; kiểm tra tenant nghiệp vụ nằm ở service tests. Chưa có ảnh Postman TASK-020 hoặc bằng chứng rollback/concurrency MySQL trong ZIP; không đánh dấu các kiểm thử đó PASS. Không có số liệu JaCoCo.
 
 
-## Nghiệm thu Backend Sprint 4 — TASK-021 (27/11/2026)
+## Mốc kiểm thử trung gian TASK-021 (27/11/2026, 01:18)
 
 Nguồn: 15 báo cáo Maven Surefire XML trong Sprint4_TestReports.zip và ảnh terminal do nhóm cung cấp. Lệnh `./mvnw.cmd clean test`, RUN_INTEGRATION_TESTS=true. BUILD SUCCESS lúc 01:18:21 +07:00, 23.805 giây. Tổng 233 test, 0 failure, 0 error, 0 skipped. Đây là kết quả một lần chạy, không cộng các lần chạy trước.
 
@@ -654,3 +654,98 @@ Không có class kiểm thử riêng Location/Product trong lần chạy này. K
 | 8 | `brandAdminShouldLockEmployeeInSameTenant` | PASS | 0.001 |
 | 9 | `brandAdminShouldNotUpdateOtherTenantUser` | PASS | 0.002 |
 | 10 | `technicianShouldNotUpdateUsers` | PASS | 0.002 |
+
+## TASK-021 — Regression cuối Sprint 4
+
+Nguồn: ảnh terminal và bảng tổng hợp Surefire do nhóm cung cấp, 27/11/2026 02:47:34 +07:00; `./mvnw.cmd clean test` với RUN_INTEGRATION_TESTS=true, 32.783 giây, BUILD SUCCESS. 341/341 PASS, 0 failures/errors/skipped, 19 class. Mốc 233 trước đó là lịch sử, không cộng dồn. 145 service, 145 security/authorization, 11 controller, 39 integration, 1 application context. Không có thời gian từng class của lần cuối.
+
+| Class | Tests | Failures | Errors | Skipped |
+|---|---:|---:|---:|---:|
+| AuthorizationTestControllerTest | 6 | 0 | 0 | 0 |
+| HealthControllerTest | 1 | 0 | 0 | 0 |
+| MachineControllerSecurityTest | 48 | 0 | 0 | 0 |
+| MachineControllerTest | 2 | 0 | 0 | 0 |
+| MachineSlotControllerSecurityTest | 48 | 0 | 0 | 0 |
+| MachineSlotControllerTest | 4 | 0 | 0 | 0 |
+| TenantControllerSecurityTest | 25 | 0 | 0 | 0 |
+| TenantControllerTest | 4 | 0 | 0 | 0 |
+| UserControllerSecurityTest | 18 | 0 | 0 | 0 |
+| AuthenticationIntegrationTest | 21 | 0 | 0 | 0 |
+| BusinessFlowIntegrationTest | 14 | 0 | 0 | 0 |
+| DatabaseIntegrationTest | 4 | 0 | 0 | 0 |
+| ScentstationBackendApplicationTests | 1 | 0 | 0 | 0 |
+| AuthServiceTest | 7 | 0 | 0 | 0 |
+| JwtServiceTest | 6 | 0 | 0 | 0 |
+| MachineServiceTest | 39 | 0 | 0 | 0 |
+| MachineSlotServiceTest | 42 | 0 | 0 | 0 |
+| TenantServiceTest | 26 | 0 | 0 | 0 |
+| UserServiceTest | 25 | 0 | 0 | 0 |
+
+| Tổng | 341 | 0 | 0 | 0 |
+
+Authentication và BusinessFlow dùng SpringBootTest + MockMvc với filter thật, JDBC/MySQL thật, @Transactional rollback mặc định; không phải HTTP qua cổng mạng hoặc E2E trình duyệt. Fixture admin được insert trực tiếp vào DB test, role lấy từ seed, UUID riêng từng test. Kiểm tra SELECT DATABASE() trước ghi.
+
+| Điều kiện issue | Bằng chứng cuối |
+|---|---|
+| Register/Login/JWT | Thay Register bằng cấp tài khoản; 21 authentication test, public register 401 |
+| RBAC và tenant isolation | Security/service và integration, gồm cross-tenant resource |
+| Quan hệ liên module | 14 business flow test; tạo tenant/user/location/product/machine/slot, ADJUSTMENT tồn ban đầu |
+| Postman | Bằng chứng các task trước; chưa có bộ Postman đầy đủ cho lần cuối |
+| Lỗi | Cấu hình DB test và tên cột inventory_transactions.slot_id đã sửa; regression PASS |
+| Tài liệu | Bộ tài liệu chung cập nhật, chờ review/merge |
+
+Không suy ra coverage 100%, kiểm thử concurrency, commit thực tế ngoài transaction test, MQTT/payment/dispense hay production readiness.
+
+### DatabaseIntegrationTest
+
+| ID | Method | Kết quả lần regression |
+|---|---|---|
+| DAT-01 | `applicationContextShouldLoad` | PASS |
+| DAT-02 | `shouldConnectToTestDatabase` | PASS |
+| DAT-03 | `shouldContainAllRequiredTables` | PASS |
+| DAT-04 | `shouldConnectToMySqlServer` | PASS |
+
+### AuthenticationIntegrationTest
+
+| ID | Method | Kết quả lần regression |
+|---|---|---|
+| AUT-01 | `shouldLoginWithUsername` | PASS |
+| AUT-02 | `shouldLoginWithEmail` | PASS |
+| AUT-03 | `shouldRejectIncorrectPassword` | PASS |
+| AUT-04 | `shouldRejectUnknownUser` | PASS |
+| AUT-05 | `shouldRejectInvalidLoginRequest` | PASS |
+| AUT-06 | `validJwtShouldAccessProtectedApi` | PASS |
+| AUT-07 | `missingJwtShouldReturn401` | PASS |
+| AUT-08 | `invalidJwtShouldReturn401` | PASS |
+| AUT-09 | `tamperedJwtShouldReturn401` | PASS |
+| AUT-10 | `shouldCreateTenantAndBrandAdminThenLogin` | PASS |
+| AUT-11 | `createdUserPasswordShouldBeHashedWithBCrypt` | PASS |
+| AUT-12 | `brandAdminShouldCreateEmployeeInOwnTenant` | PASS |
+| AUT-13 | `shouldRejectDuplicateEmail` | PASS |
+| AUT-14 | `shouldRejectDuplicateUsername` | PASS |
+| AUT-15 | `technicianShouldNotAccessUserManagement` | PASS |
+| AUT-16 | `brandAdminShouldNotCreatePlatformSuperAdmin` | PASS |
+| AUT-17 | `brandAdminShouldNotReadAnotherTenantUser` | PASS |
+| AUT-18 | `lockedUserShouldNotLogin` | PASS |
+| AUT-19 | `lockedUserExistingJwtShouldBeRejected` | PASS |
+| AUT-20 | `brandAdminShouldNotCreateTenant` | PASS |
+| AUT-21 | `publicRegistrationShouldNotBeAllowed` | PASS |
+
+### BusinessFlowIntegrationTest
+
+| ID | Method | Kết quả lần regression |
+|---|---|---|
+| BUS-01 | `shouldCompleteBusinessConfigurationFlow` | PASS |
+| BUS-02 | `shouldRecordInitialInventoryTransaction` | PASS |
+| BUS-03 | `shouldRejectCrossTenantLocationAccess` | PASS |
+| BUS-04 | `shouldRejectCrossTenantProductAccess` | PASS |
+| BUS-05 | `shouldRejectCrossTenantMachineAccess` | PASS |
+| BUS-06 | `shouldRejectCrossTenantSlotAccess` | PASS |
+| BUS-07 | `shouldRejectProductAssignmentFromAnotherTenant` | PASS |
+| BUS-08 | `shouldRejectDuplicateSlotNumber` | PASS |
+| BUS-09 | `technicianShouldReadButNotCreateMachineSlot` | PASS |
+| BUS-10 | `inventoryStaffShouldCreateSlotButNotDisableIt` | PASS |
+| BUS-11 | `shouldRejectDisablingSlotWithRemainingInventory` | PASS |
+| BUS-12 | `shouldSoftDisableEmptySlot` | PASS |
+| BUS-13 | `platformAdminShouldReadResourcesAcrossTenants` | PASS |
+| BUS-14 | `protectedBusinessEndpointsShouldRequireJwt` | PASS |

@@ -410,3 +410,13 @@ Thông báo gửi đến người dùng.
 
 
 **Trạng thái:** Bản dự thảo review v1.0; cần đối chiếu với ERD cuối cùng của nhóm trước khi coi là bản chốt.
+
+## TASK-021 — Chính sách cấp tài khoản (27/11/2026)
+
+Thay đổi phạm vi TASK-014/015: không tự đăng ký công khai; `RegisterRequest` đã xóa, `/api/v1/auth/register` không có controller và không còn public. Platform Super Admin được khởi tạo ngoài API cấp tài khoản. Platform Super Admin tạo tenant và cấp Brand Admin hoặc nhân viên cho tenant ACTIVE; Brand Admin chỉ cấp Operations Manager, Technician, Inventory Staff trong tenant của mình. Không role nào được tạo Platform Super Admin qua API. Login vẫn public, JWT bắt buộc cho API quản lý. Đây là thay đổi yêu cầu cần được nhóm xác nhận khi nghiệm thu, không phải hoàn thành Register theo issue cũ.
+
+- `POST /api/v1/tenants`: name bắt buộc tối đa 150, code bắt buộc tối đa 50, chỉ chữ ASCII, số, `_`, `-`; trim name, uppercase code (Locale.ROOT); code duy nhất; ACTIVE mặc định; saveAndFlush, lỗi constraint 409.
+- `POST /api/v1/users`: username 3–100 ký tự ASCII chữ/số/`_.-`, email hợp lệ tối đa 255, fullName tối đa 150, password 8–72 ký tự và tối đa 72 byte UTF-8, roleCode bắt buộc tối đa 50. Username/email trim và lowercase, role uppercase, fullName trim. Platform phải truyền tenantId; Brand Admin lấy tenant từ principal, tenantId khác bị 403. Tenant không tồn tại 404, INACTIVE 409. Username/email trùng 409; role không hợp lệ 400, role hợp lệ nhưng thiếu trong DB 404. BCrypt encode trước saveAndFlush; gán đúng một role từ DB, ACTIVE mặc định; lỗi constraint 409. Response không có passwordHash.
+- GET user/tenant: Platform toàn hệ thống, Brand Admin trong tenant; ngoài scope 404. PUT user chỉ fullName/email; PATCH status ACTIVE/LOCKED/INACTIVE; Brand Admin không sửa tài khoản quản trị, không tự khóa/vô hiệu hóa. PUT tenant cập nhật name/code, Brand Admin chỉ tenant mình. Không có API đổi role hay xóa tenant trong phạm vi này.
+
+Không thay đổi DDL: đây là ràng buộc service, không phải CHECK/FK mới. user_roles vẫn là bảng nối; API cấp tài khoản chỉ gán một role.

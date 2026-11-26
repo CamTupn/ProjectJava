@@ -1047,7 +1047,7 @@ POST requires positive slotNumber, capacity >= 0.01, non-negative initial volume
 
 ## TASK-021 — MySQL Integration Test (opt-in)
 
-Prerequisites: MySQL 8, schema `scentstation_test` initialized from the project schema (21 tables), separate local account `scentstation_tester` with SELECT/INSERT/UPDATE/DELETE only on that schema. Do not import scripts containing `USE scentstation` into the test environment without adapting the database name. Do not store passwords or JWT secrets in Git.
+Prerequisites: MySQL 8, schema `scentstation_test` initialized from the project schema (21 tables) and seeded with the five role codes, separate local account `scentstation_tester` with SELECT/INSERT/UPDATE/DELETE only on that schema. Do not import scripts containing `USE scentstation` into the test environment without adapting the database name. Do not store passwords or JWT secrets in Git.
 
 The test profile is `src/test/resources/application-integration.properties`, using `TEST_DB_PASSWORD` and `TEST_JWT_SECRET`, `ddl-auto=validate`, `spring.sql.init.mode=never`. The local JDBC connection uses `useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC`; this is for local tests only, not production.
 
@@ -1064,4 +1064,10 @@ $env:RUN_INTEGRATION_TESTS = "true"
 .\mvnw.cmd clean test
 ```
 
-Latest verified run: 233 tests, 0 failures/errors/skipped (27/11/2026). To run only database tests: `.\mvnw.cmd test "-Dtest=DatabaseIntegrationTest"`. To opt out: `Remove-Item Env:RUN_INTEGRATION_TESTS -ErrorAction SilentlyContinue`. Four integration tests are then skipped. Do not commit raw Surefire XML or credentials.
+Latest verified run: 341 tests, 0 failures/errors/skipped (27/11/2026). To run only database tests: `.\mvnw.cmd test "-Dtest=DatabaseIntegrationTest"`. To opt out: `Remove-Item Env:RUN_INTEGRATION_TESTS -ErrorAction SilentlyContinue`. 39 integration tests are then skipped (expected 302 remaining). Do not commit raw Surefire XML or credentials.
+
+## TASK-021 — Chính sách cấp tài khoản (27/11/2026)
+
+Thay đổi phạm vi TASK-014/015: không tự đăng ký công khai; `RegisterRequest` đã xóa, `/api/v1/auth/register` không có controller và không còn public. Platform Super Admin được khởi tạo ngoài API cấp tài khoản. Platform Super Admin tạo tenant và cấp Brand Admin hoặc nhân viên cho tenant ACTIVE; Brand Admin chỉ cấp Operations Manager, Technician, Inventory Staff trong tenant của mình. Không role nào được tạo Platform Super Admin qua API. Login vẫn public, JWT bắt buộc cho API quản lý. Đây là thay đổi yêu cầu cần được nhóm xác nhận khi nghiệm thu, không phải hoàn thành Register theo issue cũ.
+
+Run all integration classes: `./mvnw.cmd test "-Dtest=DatabaseIntegrationTest,AuthenticationIntegrationTest,BusinessFlowIntegrationTest"` (PowerShell). Expected 39 tests. Authentication/BusinessFlow use test-only fixtures and rollback. Never use real credentials as fixture constants.
