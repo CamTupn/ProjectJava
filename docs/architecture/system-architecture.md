@@ -278,3 +278,6 @@ Sơ đồ là luồng logic khái quát. Thiết kế chi tiết phải xử lý
 4. Khởi tạo backend, frontend và simulator theo cấu trúc đã thống nhất.
 
 ---
+## Ràng buộc triển khai quản lý khe
+
+MachineSlotController → MachineSlotService (@Transactional) → MachineSlotRepository / InventoryTransactionRepository → MySQL. Tenant scope qua Machine.tenantId và Product.tenantId; role kiểm tra ở cả Controller và Service. EntityGraph machine/product phục vụ mapping. Tồn ban đầu dương được ghi ADJUSTMENT cùng transaction tạo khe. PUT không thay đổi tồn; DELETE chỉ khi hết tồn. Các luồng refill/dispense và locking khi thay đổi tồn đồng thời là yêu cầu tích hợp tiếp theo, chưa được chứng minh bằng regression mock.

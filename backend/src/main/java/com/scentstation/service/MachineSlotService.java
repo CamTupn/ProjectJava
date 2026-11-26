@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Objects;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -108,6 +109,8 @@ public class MachineSlotService {
         CurrentUserPrincipal current = requireRole(CONFIGURATION_ROLES);
         Machine machine = findAccessibleMachine(machineId, current);
 
+        ensureMachineNotDisabled(machine);
+
         validateVolumeConfiguration(
                 request.getCapacityMl(),
                 request.getCurrentVolumeMl(),
@@ -122,7 +125,9 @@ public class MachineSlotService {
         MachineSlot slot = new MachineSlot();
         slot.setMachine(machine);
         slot.setSlotNumber(request.getSlotNumber());
-        slot.setProduct(findProductForMachine(request.getProductId(), machine));
+        Product product = findProductForMachine(request.getProductId(), machine);
+        ensureProductForInventory(product, request.getCurrentVolumeMl());
+        slot.setProduct(product);
         slot.setCapacityMl(request.getCapacityMl());
         slot.setCurrentVolumeMl(request.getCurrentVolumeMl());
         slot.setLowStockThresholdMl(request.getLowStockThresholdMl());
@@ -143,6 +148,7 @@ public class MachineSlotService {
         CurrentUserPrincipal current = requireRole(CONFIGURATION_ROLES);
         MachineSlot slot = findAccessibleSlot(id, current);
         ensureNotDisabled(slot);
+        ensureMachineNotDisabled(slot.getMachine());
 
         validateVolumeConfiguration(
                 request.getCapacityMl(),
@@ -160,11 +166,11 @@ public class MachineSlotService {
             );
         }
 
+        Product newProduct = findProductForMachine(request.getProductId(), slot.getMachine());
+        ensureProductChangeAllowed(slot, newProduct);
+        ensureProductForInventory( newProduct, slot.getCurrentVolumeMl());
         slot.setSlotNumber(request.getSlotNumber());
-        slot.setProduct(findProductForMachine(
-                request.getProductId(),
-                slot.getMachine()
-        ));
+        slot.setProduct(newProduct);
         slot.setCapacityMl(request.getCapacityMl());
         slot.setLowStockThresholdMl(request.getLowStockThresholdMl());
         if (slot.getStatus() != MachineSlotStatus.ERROR) {
@@ -186,6 +192,7 @@ public class MachineSlotService {
         CurrentUserPrincipal current = requireRole(STATUS_ROLES);
         MachineSlot slot = findAccessibleSlot(id, current);
         ensureNotDisabled(slot);
+        ensureMachineNotDisabled(slot.getMachine());
 
         MachineSlotStatus status;
         try {
@@ -274,7 +281,11 @@ public class MachineSlotService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Machine not found with ID: " + machineId
                 ));
-        ensureTenantAccess(machine.getTenant().getId(), current, "Machine");
+        ensureTenantAccess(
+            machine.getTenantId(),
+            current,
+            "Machine"
+        );
         return machine;
     }
 
@@ -287,7 +298,7 @@ public class MachineSlotService {
                         "Machine slot not found with ID: " + id
                 ));
         ensureTenantAccess(
-                slot.getMachine().getTenant().getId(),
+                slot.getMachine().getTenantId(),
                 current,
                 "Machine slot"
         );
@@ -295,7 +306,10 @@ public class MachineSlotService {
         return slot;
     }
 
-    private Product findProductForMachine(Long productId, Machine machine) {
+    private Product findProductForMachine(
+            Long productId,
+            Machine machine
+    ) {
         if (productId == null) {
             return null;
         }
@@ -305,9 +319,19 @@ public class MachineSlotService {
                         "Product not found with ID: " + productId
                 ));
 
-        if (!machine.getTenant().getId().equals(product.getTenant().getId())) {
+        if (machine.getTenantId() == null
+                || !Objects.equals(
+                        machine.getTenantId(),
+                        product.getTenantId()
+                )) {
             throw new ResourceNotFoundException(
                     "Product not found with ID: " + productId
+            );
+        }
+
+        if (!"ACTIVE".equals(product.getStatus())) {
+            throw new ResourceConflictException(
+                    "Inactive products cannot be assigned to machine slots"
             );
         }
 
@@ -334,9 +358,11 @@ public class MachineSlotService {
     private void ensureProductTenantMatchesMachine(MachineSlot slot) {
         Product product = slot.getProduct();
         if (product != null
-                && (product.getTenant() == null
-                || !slot.getMachine().getTenant().getId()
-                        .equals(product.getTenant().getId()))) {
+            && (slot.getMachine().getTenantId() == null
+            || !Objects.equals(
+                    slot.getMachine().getTenantId(),
+                    product.getTenantId()
+            ))) {
             throw new ResourceNotFoundException(
                     "Machine slot not found with ID: " + slot.getId()
             );
@@ -364,6 +390,21 @@ public class MachineSlotService {
                 || lowStockThresholdMl == null) {
             throw new IllegalArgumentException(
                     "Capacity, current volume and low-stock threshold are required"
+            );
+        }
+        if (capacityMl.compareTo(BigDecimal.ZERO) <= 0) {
+        throw new IllegalArgumentException(
+                    "Capacity must be greater than zero"
+                );
+        }
+        if (currentVolumeMl.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "Current volume must not be negative"
+            );
+        }
+        if (lowStockThresholdMl.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "Low-stock threshold must not be negative"
             );
         }
         if (currentVolumeMl.compareTo(capacityMl) > 0) {
@@ -408,4 +449,52 @@ public class MachineSlotService {
                         + " already exists for machine " + machineId
         );
     }
+    private void ensureProductForInventory(
+        Product product,
+        BigDecimal currentVolumeMl
+    ) {
+        if (product == null
+                && currentVolumeMl.compareTo(BigDecimal.ZERO) > 0) {
+            throw new IllegalArgumentException(
+                    "A product is required when the slot contains inventory"
+            );
+        }
+    }
+
+    private void ensureProductChangeAllowed(
+            MachineSlot slot,
+            Product newProduct
+    ) {
+        Long currentProductId = slot.getProduct() == null
+            ? null
+            : slot.getProduct().getId();
+
+        Long newProductId = newProduct == null
+            ? null
+            : newProduct.getId();
+
+        boolean productChanged = !Objects.equals(
+            currentProductId,
+            newProductId
+        );
+
+        if (productChanged
+                && slot.getCurrentVolumeMl()
+                    .compareTo(BigDecimal.ZERO) > 0) {
+            throw new ResourceConflictException(
+                "Cannot change or remove product while the slot contains inventory"
+            );
+        }
+    }
+
+
+    private void ensureMachineNotDisabled(Machine machine) {
+        if ("DISABLED".equals(machine.getOperationalStatus())) {
+            throw new ResourceConflictException(
+                    "Cannot configure slots on a disabled machine"
+            );
+        }
+    }
+
+
 }

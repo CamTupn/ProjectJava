@@ -152,7 +152,10 @@ Quản lý từng khe nước hoa độc lập trên máy.
 | `current_volume_ml` | DECIMAL(8,2) | NN, CHECK 0..capacity_ml | Thể tích ước tính hiện tại |
 | `low_stock_threshold_ml` | DECIMAL(8,2) | NN, CHECK >= 0 | Ngưỡng tồn thấp |
 | `status` | VARCHAR(20) | NN | AVAILABLE/LOW_STOCK/EMPTY/DISABLED/ERROR |
+| `created_at` | DATETIME | NN, DEFAULT CURRENT_TIMESTAMP | Thời điểm tạo |
 | `updated_at` | DATETIME | NN, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | Thời điểm cập nhật |
+
+**Ràng buộc nghiệp vụ bổ sung (Service):** tenant suy ra từ machines.tenant_id; product nếu có phải cùng tenant. Product ACTIVE khi gán; tồn dương bắt buộc có product. Threshold không vượt capacity; slotNumber dương. Không đổi/gỡ product khi còn tồn. Unique số khe áp dụng cả DISABLED. Tồn ban đầu dương ghi ADJUSTMENT vào inventory_transactions (slot_id, performed_by_user_id, volume_change_ml, notes); không ghi khi bằng 0. Soft delete giữ row và FK lịch sử, chỉ khi tồn bằng 0. Các quy tắc service không được hiểu là CHECK constraint mới trong SQL.
 
 ### 3.9 Bảng `orders`
 Đơn trải nghiệm của khách hàng; lưu snapshot để giữ nguyên tên và giá lúc đặt.

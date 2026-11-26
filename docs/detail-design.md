@@ -262,25 +262,84 @@ sequenceDiagram
 
 Chi tiết API: [API Specification](api/api-specification.md#7-machine-and-slot-module). Kết quả test: [TASK-019](test-reports/test-report.md).
 
-## 8. Machine Slot Management — TASK-020 [ĐANG TRIỂN KHAI]
+## 8. Machine Slot Management — TASK-020 [HIỆN CÓ]
 
-`MachineSlotController` → `MachineSlotService` → `MachineSlotRepository`, DTO + mapper.
+### 8.1 Phạm vi và cấu trúc lớp
 
-| Endpoint | Thiết kế |
+Module quản lý cấu hình khe, đọc tồn hiện tại, ghi nhận tồn ban đầu và vô hiệu hóa mềm. Không triển khai lại payment, dispense, refill hoặc inventory removal.
+
+| Lớp | Trách nhiệm |
 |---|---|
-| `GET /api/v1/machines/{machineId}/slots` | Kiểm tra tenant machine trước khi list |
-| `GET /api/v1/machine-slots/{id}` | Kiểm tra tenant qua machine và product liên quan |
-| `POST /api/v1/machines/{machineId}/slots` | slotNumber unique trong machine; capacity > 0; 0 ≤ current ≤ capacity; threshold ≤ capacity; product cùng tenant |
-| `PUT /api/v1/machine-slots/{id}` | Cho đổi product/capacity/threshold; không sửa currentVolumeMl tùy tiện |
-| `DELETE /api/v1/machine-slots/{id}` | `DISABLED`, giữ tồn và lịch sử; yêu cầu xử lý lượng tồn còn lại |
+| MachineSlotController | Sáu endpoint, @Valid, @PreAuthorize, HTTP 200/201 |
+| MachineSlotService | @Service, @Transactional; kiểm tra role, tenant, dung tích, trạng thái và tồn kho |
+| MachineSlotRepository | JpaRepository; truy vấn theo machine, kiểm tra số khe trùng |
+| MachineSlotMapper | toResponse: lấy machine.id, product.id/name nếu có, dung tích, trạng thái, timestamps |
+| MachineSlot | JPA entity machine_slots, @DynamicUpdate, enum STRING, timestamps Hibernate |
+| InventoryTransactionRepository | Lưu ADJUSTMENT ban đầu trong cùng transaction |
+| CurrentUserService | Cung cấp principal, userId, tenantId và roles |
 
-### 8.1 Quy tắc suy ra trạng thái
+Machine và Product dùng tenantId kiểu Long theo TASK-018/019; không sử dụng getTenant() hoặc EntityGraph tenant. Slot không có tenant_id riêng. Quan hệ ManyToOne LAZY đến Machine bắt buộc, Product tùy chọn. Unique constraint uq_machine_slots_number gồm machine_id và slot_number; không cascade delete lịch sử.
 
-Ưu tiên `DISABLED` → `ERROR` → `EMPTY` nếu current=0 → `LOW_STOCK` nếu current≤threshold → `AVAILABLE`. **[CẦN CHỐT]** Nếu trạng thái được lưu vật lý, cần cơ chế đồng bộ sau refill/dispense; nếu suy ra động, phải tránh ghi sai `status` so với schema.
+### 8.2 Repository và DTO
 
-### 8.2 Không làm sai lệch tồn kho
+| Method | Hành vi |
+|---|---|
+| findAllByMachine_IdOrderBySlotNumber | Lấy tất cả khe theo máy, sắp xếp tăng dần; EntityGraph machine, product |
+| findById | EntityGraph machine, product; Optional |
+| existsByMachine_IdAndSlotNumber | Kiểm tra trùng khi tạo |
+| existsByMachine_IdAndSlotNumberAndIdNot | Kiểm tra trùng khi cập nhật, loại trừ chính khe |
+| saveAndFlush | Ghi và flush; DataIntegrityViolationException được chuyển thành ResourceConflictException |
 
-CRUD Slot không phải nơi ghi nhận refill/dispense. Chỉ các use case nghiệp vụ Inventory/Refill/Dispense mới được thay đổi `current_volume_ml` kèm `inventory_transactions`. Không trừ tồn lúc tạo order; không trừ khi timeout/UNCERTAIN. Với cập nhật đồng thời, cần optimistic locking hoặc khóa dòng khi điều chỉnh tồn để tránh lost update.
+CreateMachineSlotRequest: slotNumber, productId, capacityMl, currentVolumeMl, lowStockThresholdMl. UpdateMachineSlotRequest: slotNumber, productId, capacityMl, lowStockThresholdMl; không có currentVolumeMl, machineId hoặc tenantId. slotNumber @Positive @NotNull; capacity @DecimalMin(0.01); volume/threshold @DecimalMin(0.00); tất cả trường decimal @NotNull @Digits(integer=6,fraction=2). UpdateMachineSlotStatusRequest: @NotBlank, @Pattern không phân biệt hoa thường, AVAILABLE/LOW_STOCK/EMPTY/ERROR.
+
+MachineSlotResponse gồm id, machineId, slotNumber, productId, productName, capacityMl, currentVolumeMl, lowStockThresholdMl, status, createdAt, updatedAt. MachineSlotListResponse gồm machineId, totalSlots, slots.
+
+### 8.3 RBAC và Tenant Isolation
+
+| Thao tác | Super Admin | Brand Admin | Operations | Technician | Inventory |
+|---|---|---|---|---|---|
+| List/detail | Global | Own | Own | Own | Own |
+| Create/update | Global | Own | Own | 403 | Own |
+| PATCH status | Global | Own | Own | Own | 403 |
+| DELETE | Global | Own | Own | 403 | 403 |
+
+Global: toàn hệ thống; Own: tenant của principal. requireRole chạy trước truy vấn. findAccessibleMachine kiểm tra machine.tenantId; findAccessibleSlot kiểm tra tenant qua slot.machine và kiểm tra product hiện tại. findProductForMachine kiểm tra product.tenantId bằng machine.tenantId kể cả Super Admin, đồng thời yêu cầu ACTIVE. Danh sách kiểm tra từng slot trước mapping; dữ liệu sai tenant bị từ chối 404. Không lấy tenant từ request.
+
+### 8.4 Luồng xử lý theo method
+
+| Method / endpoint | Trình tự xử lý |
+|---|---|
+| getSlotsByMachine / GET machines/{machineId}/slots | requireRole → findAccessibleMachine → query ordered slots → kiểm tra product tenant từng khe → map → trả count và list (200) |
+| getSlot / GET machine-slots/{id} | requireRole → findAccessibleSlot → map (200) |
+| createSlot / POST machines/{machineId}/slots | role → machine scope → machine không DISABLED → validate volume → kiểm tra số khe → tìm product ACTIVE cùng tenant → kiểm tra tồn có product → tính status → saveSlot → recordInitialInventory → map (201) |
+| updateSlot / PUT machine-slots/{id} | role → slot scope → slot/machine không DISABLED → validate với tồn hiện tại → kiểm tra trùng số khe → product hợp lệ → chặn đổi/gỡ product nếu còn tồn → cập nhật cấu hình → giữ ERROR hoặc tính lại status → saveSlot → map (200) |
+| updateSlotStatus / PATCH machine-slots/{id}/status | role → slot scope → slot/machine không DISABLED → parse status → ERROR hoặc tính lại trạng thái theo tồn → saveSlot → map (200) |
+| disableSlot / DELETE machine-slots/{id} | role → slot scope → nếu đã DISABLED trả nguyên trạng → nếu còn tồn trả 409 → set DISABLED → saveSlot → map (200) |
+
+Tất cả route có prefix /api/v1. DELETE không yêu cầu machine ACTIVE; khác với create/update/PATCH. GET không lọc DISABLED. PUT thay thế cấu hình, productId null là yêu cầu gỡ product, không phải giữ nguyên.
+
+### 8.5 Trạng thái và bất biến
+
+| Điều kiện | Kết quả |
+|---|---|
+| DELETE hợp lệ, tồn = 0 | DISABLED; không phục hồi qua PATCH/PUT |
+| PATCH ERROR | ERROR |
+| PUT khi đang ERROR | Giữ ERROR |
+| Tạo hoặc tính lại khi volume = 0 | EMPTY |
+| 0 < volume <= threshold | LOW_STOCK |
+| volume > threshold | AVAILABLE |
+
+PATCH AVAILABLE/LOW_STOCK/EMPTY là yêu cầu tính lại, không ép trạng thái theo giá trị gửi. DISABLED chỉ qua DELETE. validateVolumeConfiguration yêu cầu capacity > 0, 0 <= volume <= capacity, 0 <= threshold <= capacity. Product bắt buộc nếu volume > 0. Không thay đổi volume qua PUT/PATCH/DELETE. HTTP 400: validation; 401: chưa xác thực; 403: thiếu role; 404: thiếu hoặc ngoài scope; 409: trùng số khe, trạng thái không cho phép, product inactive, còn tồn hoặc integrity conflict.
+
+### 8.6 Giao dịch tồn kho và giới hạn
+
+recordInitialInventory bỏ qua volume=0; nếu dương tạo InventoryTransaction với slot, performedByUserId từ principal, transactionType ADJUSTMENT, volumeChangeMl dương và notes ghi nhận tồn ban đầu. saveAndFlush slot và transaction nằm trong cùng @Transactional service; rollback khi lỗi runtime theo cơ chế transaction. Không tạo Order/Refill/Dispense cho thao tác này. Không xóa transaction khi disable.
+
+[THIẾT KẾ] Refill/dispense/adjustment sau khởi tạo phải cập nhật tồn và trạng thái nhất quán, chỉ trừ tồn bán hàng sau xác nhận dispense thành công. Không coi timeout là thành công. @DynamicUpdate không thay thế locking; chưa có bằng chứng kiểm thử concurrency, rollback MySQL thật hoặc tích hợp kiosk ngăn sử dụng slot DISABLED. Cần kiểm tra ở các module tiếp theo.
+
+### 8.7 Kiểm thử
+
+42 service tests, 4 controller tests, 48 controller security invocations; 94 riêng module, 229 toàn backend PASS theo Maven ngày 27/11/2026. Xem test-report.md. Đây là kết quả automated tests, không phải độ bao phủ 100% hay xác nhận E2E.
 
 ## 9. Order & Payment — TASK-024/025 [THIẾT KẾ]
 
@@ -398,7 +457,7 @@ Simulator hỗ trợ online/offline, heartbeat, success, failure, duplicate ACK,
 | 017 | User/Tenant | Có code, đã review trước đó | 016 |
 | 018 | Location/Product | Đang triển khai, chưa có trong ZIP | 017 |
 | 019 | Machine | Đang triển khai, chưa có trong ZIP | 017, 018 |
-| 020 | Machine Slot | Đang triển khai, chưa có trong ZIP | 018, 019 |
+| 020 | Machine Slot | Đã triển khai; bản fix đang review | 018, 019 |
 | 021 | Integration Testing & Docs | Thiết kế/chờ kết quả thực tế | 018–020 |
 | 022 | MQTT Communication | Thiết kế | 019, MQTT contract |
 | 023 | Kiosk Dispense Control | Thiết kế | 020, 022, 025 |
@@ -876,7 +935,7 @@ flowchart TD
 | User / Tenant | TASK-017 | `UserController`, `TenantController` và service | Có source |
 | Location / Product | TASK-018 | Source TASK-019 + Surefire 89/89 | Chưa xác nhận merge |
 | Machine | TASK-019 | SRS + schema + nhánh chưa có trong ZIP | Chưa xác nhận merge |
-| Machine Slot | TASK-020 | SRS + schema + nhánh chưa có trong ZIP | Chưa xác nhận merge |
+| Machine Slot | TASK-020 | Source ZIP sau sửa conflict + automated tests | PR gốc #64 đã merge; bản fix chưa merge |
 | Integration | TASK-021 | Test plan | Chưa xác nhận triển khai |
 | MQTT | TASK-022 | `iot/protocol/mqtt-message-contract.md` (draft) | Chưa xác nhận code |
 | Kiosk Dispense | TASK-023 | SRS + sequence/activity | Thiết kế |

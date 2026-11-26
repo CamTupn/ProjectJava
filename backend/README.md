@@ -1040,3 +1040,6 @@ Khi hoàn thành các bước trên, môi trường phát triển Backend đã s
 **Backend Development Guide**
 
 Tài liệu sẽ được cập nhật khi nhóm bổ sung các module, API và quy trình triển khai mới.
+### Machine Slot — quy tắc triển khai
+
+POST requires positive slotNumber, capacity >= 0.01, non-negative initial volume and threshold within capacity. Product must be ACTIVE and match the machine tenant; positive stock requires a product. PUT replaces configuration including slotNumber; productId null unassigns only when stock is zero. PUT cannot change currentVolumeMl. PATCH ERROR sets error; AVAILABLE/LOW_STOCK/EMPTY recalculates actual status. Disabled machines reject create/update/PATCH; disabled slots reject update/PATCH. DELETE returns the disabled DTO and is idempotent; remaining stock returns 409. See shared API specification and test report in docs. Latest reported regression: 229/229 PASS (27/11/2026); integration evidence tracked separately.

@@ -713,7 +713,7 @@ Không cam kết mã lỗi dạng string riêng. Trường errors có thể ch�
 
 **Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`, `TECHNICIAN`, `INVENTORY_STAFF`
 
-### Response
+### Response — HTTP 200
 
 ```json
 {
@@ -722,6 +722,7 @@ Không cam kết mã lỗi dạng string riêng. Trường errors có thể ch�
   "slots": [
     {
       "id": 1,
+      "machineId": 1,
       "slotNumber": 1,
       "productId": 10,
       "productName": "Fragrance A",
@@ -756,21 +757,25 @@ Không cam kết mã lỗi dạng string riêng. Trường errors có thể ch�
 }
 ```
 
+### Response — HTTP 201
+
+Returns a single MachineSlotResponse with the same fields as each item in section 7.5.
+
 ### Validation and errors
 
 - Machine must exist and be within the caller's tenant scope.
 - `slotNumber` must be positive and unique within the machine.
 - `capacityMl` must be positive; current volume and threshold must be non-negative and no greater than capacity.
-- Product is optional; when provided, it must belong to the same tenant as the machine.
+- Product is optional only for zero initial stock; any assigned product must be ACTIVE and belong to the same tenant as the machine, including for platform administrators. A disabled machine rejects creation.
 - Initial status is calculated from current volume and threshold.
 - A non-zero initial volume is recorded atomically as an `ADJUSTMENT` inventory transaction with the creating user.
-- `400` for invalid values, `404` for inaccessible/missing machine or product, and `409` for duplicate slot number.
+- `400` for invalid values, `404` for inaccessible/missing machine or product, and `409` for duplicate slot number, inactive product, disabled machine or persistence integrity conflict.
 
 ## 7.7 Get Machine Slot
 
 ### `GET /api/v1/machine-slots/{id}`
 
-**Access:** all five machine-slot roles listed in section 7.5. Resources outside the caller's tenant scope return `404`.
+**Access:** all five machine-slot roles listed in section 7.5. Resources outside the caller's tenant scope return `404`. Returns HTTP 200 and a single MachineSlotResponse.
 
 ## 7.8 Update Machine Slot Configuration
 
@@ -787,7 +792,7 @@ Không cam kết mã lỗi dạng string riêng. Trường errors có thể ch�
 }
 ```
 
-The request replaces the slot configuration. Set `productId` to `null` to unassign the product. `machineId`, tenant, and `currentVolumeMl` are not updateable through this endpoint. Capacity cannot be reduced below current volume. Existing `ERROR` remains until explicitly cleared through the status endpoint. A disabled slot cannot be updated.
+The request replaces the slot configuration. Set `productId` to `null` to unassign the product. `machineId`, tenant, and `currentVolumeMl` are not updateable through this endpoint. Capacity cannot be reduced below current volume. Existing `ERROR` remains until explicitly cleared through the status endpoint. A disabled slot or disabled parent machine cannot be updated (409). Changing or removing a product while stock remains returns 409. Any assigned product must be ACTIVE and match the machine tenant. Returns HTTP 200 and the updated MachineSlotResponse.
 
 ## 7.9 Update Machine Slot Status
 
@@ -801,7 +806,7 @@ The request replaces the slot configuration. Set `productId` to `null` to unassi
 }
 ```
 
-`ERROR` can be set explicitly. Sending `AVAILABLE`, `LOW_STOCK`, or `EMPTY` clears an existing error and the actual status is recalculated from volume and threshold. `DISABLED` is only set through the delete endpoint.
+`ERROR` can be set explicitly. Sending `AVAILABLE`, `LOW_STOCK`, or `EMPTY` clears an existing error and the actual status is recalculated from volume and threshold. `DISABLED` is only set through the delete endpoint. Status is case-insensitive; blank or unsupported values return 400. Disabled slots and disabled parent machines return 409. Returns HTTP 200 and MachineSlotResponse.
 
 ## 7.10 Disable Machine Slot (Soft Delete)
 
@@ -809,7 +814,18 @@ The request replaces the slot configuration. Set `productId` to `null` to unassi
 
 **Access:** `PLATFORM_SUPER_ADMIN`, `BRAND_ADMIN`, `OPERATIONS_MANAGER`
 
-Sets status to `DISABLED`; the row and inventory history are retained. The request returns `409` while `currentVolumeMl` is greater than zero, until inventory is handled through the inventory-removal workflow.
+Sets status to `DISABLED`; the row and inventory history are retained. The request returns `409` while `currentVolumeMl` is greater than zero, until inventory is handled through the inventory-removal workflow. Returns HTTP 200 and MachineSlotResponse, including on repeated deletion of an already disabled slot. No physical deletion or stock adjustment occurs.
+
+---
+
+### 7.11 Shared slot API contract — implemented
+
+- All six routes require authentication (401 without authentication; 403 for insufficient roles). Controller and service enforce the same role sets.
+- List is ordered by slotNumber ascending and includes disabled slots; totalSlots is the number of returned rows. A missing machine is not an empty list. A mismatched product tenant causes 404 rather than returning inconsistent data.
+- POST and PUT require positive integer slotNumber, capacityMl >= 0.01 and non-negative threshold; POST additionally requires non-negative currentVolumeMl. Decimal fields accept at most six integer digits and two fractional digits. Threshold and volume cannot exceed capacity. PUT has no currentVolumeMl or machineId field.
+- Successful responses are raw DTOs, not ApiResponse wrappers. productId and productName are nullable. Numeric volume fields are BigDecimal JSON numbers; timestamps are LocalDateTime. Examples are illustrative, not captured Postman responses.
+- 404 covers missing or inaccessible Machine/Slot/Product and inconsistent product-tenant references; 409 covers business conflicts. No cross-tenant product assignment even for platform administrators.
+- Inventory removal, refill and dispense are separate workflows; this module does not expose those operations. Status alone is not proof of kiosk readiness.
 
 ---
 
