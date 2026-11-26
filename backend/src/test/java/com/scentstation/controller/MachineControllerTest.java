@@ -4,6 +4,7 @@ import com.scentstation.dto.response.MachineResponse;
 import com.scentstation.exception.ResourceNotFoundException;
 import com.scentstation.service.JwtService;
 import com.scentstation.service.MachineService;
+import com.scentstation.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -31,6 +32,9 @@ class MachineControllerTest {
 
     @MockitoBean
     private JwtService jwtService;
+
+    @MockitoBean
+    private UserRepository userRepository;
 
     private final LocalDateTime now = LocalDateTime.of(2026, 11, 20, 9, 0, 0);
 
