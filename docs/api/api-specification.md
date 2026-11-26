@@ -2411,3 +2411,8 @@ Platform Super Admin creates a Product (tenantId is required for this role):
 - Tạo máy luôn OFFLINE; yêu cầu ONLINE bị từ chối 400. Operational mặc định ACTIVE; hai trạng thái độc lập.
 - Tenant admin không được tạo máy cho tenant khác (403); truy vấn máy/tenant khác trả 404. Platform phải cung cấp tenantId khi tạo; tenant phải ACTIVE. Location tùy chọn, nếu có phải ACTIVE và cùng tenant. Platform chọn location sai tenant: 400; tenant user chọn location ngoài scope: 404.
 - machineCode, serialNumber, deviceIdentity duy nhất toàn hệ thống; trùng hoặc vi phạm ràng buộc khi saveAndFlush trả 409. PUT chỉ sửa trường khác null, không đổi tenant hoặc trạng thái; locationId null không gỡ location. DELETE chỉ đặt DISABLED, không xóa bản ghi.
+
+
+## TASK-021 — Trạng thái xác minh contract Sprint 4
+
+Không thay đổi endpoint hoặc payload trong TASK-021 ở phạm vi kiểm thử database. Regression 233/233 PASS gồm các test Controller, Security, Service, JWT và DatabaseIntegrationTest. Đối chiếu từng API với các test được liệt kê trong test-report.md; kết quả không thay thế bằng chứng HTTP/Postman cho toàn bộ contract.

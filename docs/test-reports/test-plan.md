@@ -42,3 +42,15 @@ Mỗi module cần test nghiệp vụ, phân quyền, dữ liệu biên và lỗ
 | E2E (giai đoạn sau) | Kiosk/order/dispense với slot DISABLED/ERROR/EMPTY | Không cho phun hoặc tạo giao dịch không hợp lệ |
 
 Chạy regression chung một lần sau khi hoàn thiện source. Không cần lặp lại toàn bộ Postman chỉ để chứng minh các mock test đã PASS; bằng chứng tích hợp vẫn được theo dõi riêng.
+
+
+## TASK-021 — Kiểm thử tích hợp và nghiệm thu Sprint 4
+
+| ID | Kịch bản | Kỳ vọng |
+|---|---|---|
+| IT-DB-001 | Khởi động Spring context | JdbcTemplate được inject; Hibernate validate thành công |
+| IT-DB-002 | SELECT DATABASE() | scentstation_test |
+| IT-DB-003 | Đếm base table | 21 |
+| IT-DB-004 | SELECT 1 | 1 |
+
+Chạy opt-in theo README. Regression bao gồm 229 test hiện có và 4 test database. Kiểm tra lại bằng chứng Postman cũ trước khi bổ sung test; chỉ bổ sung luồng Register/Login/JWT hoặc Tenant/Location/Machine/Product/Slot nếu chưa có bằng chứng. Không đánh đồng mock test với E2E. Báo cáo chi tiết nằm trong test-report.md.

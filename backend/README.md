@@ -1043,3 +1043,25 @@ Tài liệu sẽ được cập nhật khi nhóm bổ sung các module, API và 
 ### Machine Slot — quy tắc triển khai
 
 POST requires positive slotNumber, capacity >= 0.01, non-negative initial volume and threshold within capacity. Product must be ACTIVE and match the machine tenant; positive stock requires a product. PUT replaces configuration including slotNumber; productId null unassigns only when stock is zero. PUT cannot change currentVolumeMl. PATCH ERROR sets error; AVAILABLE/LOW_STOCK/EMPTY recalculates actual status. Disabled machines reject create/update/PATCH; disabled slots reject update/PATCH. DELETE returns the disabled DTO and is idempotent; remaining stock returns 409. See shared API specification and test report in docs. Latest reported regression: 229/229 PASS (27/11/2026); integration evidence tracked separately.
+
+
+## TASK-021 — MySQL Integration Test (opt-in)
+
+Prerequisites: MySQL 8, schema `scentstation_test` initialized from the project schema (21 tables), separate local account `scentstation_tester` with SELECT/INSERT/UPDATE/DELETE only on that schema. Do not import scripts containing `USE scentstation` into the test environment without adapting the database name. Do not store passwords or JWT secrets in Git.
+
+The test profile is `src/test/resources/application-integration.properties`, using `TEST_DB_PASSWORD` and `TEST_JWT_SECRET`, `ddl-auto=validate`, `spring.sql.init.mode=never`. The local JDBC connection uses `useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC`; this is for local tests only, not production.
+
+From backend in PowerShell:
+
+```powershell
+$env:TEST_DB_PASSWORD = Read-Host "Test database password"
+$bytes = New-Object byte[] 64
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$env:TEST_JWT_SECRET = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+$env:RUN_INTEGRATION_TESTS = "true"
+.\mvnw.cmd clean test
+```
+
+Latest verified run: 233 tests, 0 failures/errors/skipped (27/11/2026). To run only database tests: `.\mvnw.cmd test "-Dtest=DatabaseIntegrationTest"`. To opt out: `Remove-Item Env:RUN_INTEGRATION_TESTS -ErrorAction SilentlyContinue`. Four integration tests are then skipped. Do not commit raw Surefire XML or credentials.

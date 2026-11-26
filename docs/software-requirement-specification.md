@@ -1055,3 +1055,8 @@ Tài liệu này là **bản nháp SRS 1.1 để nhóm review**. Sau khi thống
 SRS-MACH-002: CRUD cấu hình, đọc tồn, trạng thái, soft delete và tenant isolation đã có trong backend Machine Slot. SRS-INV-001/002/003: mới xác nhận ghi ADJUSTMENT tồn ban đầu và bảo toàn tồn khi chỉnh cấu hình; các workflow refill, dispense, removal và đối soát vẫn cần nghiệm thu riêng. Điều kiện sẵn sàng của kiosk/order chưa được xác nhận bởi test CRUD.
 
 Lưu ý truy vết: TASK-020 trong bảng kế hoạch SRS ban đầu là kiểm thử E2E; TASK-020 trong nhánh triển khai hiện tại là Machine Slot Management (PR #64). Giữ nguyên mã lịch sử của kế hoạch SRS để tránh tự ý đổi các liên kết yêu cầu; dùng tên công việc kèm mã khi đối chiếu.
+
+
+## TASK-021 — Truy vết nghiệm thu Sprint 4
+
+TASK-021 tích hợp các module TASK-014–020 theo issue triển khai. Kết quả regression 233/233 và database integration 4/4 (nằm trong 233) được ghi tại docs/test-reports/test-report.md. Điều kiện nghiệm thu luồng liên module và Postman cần đối chiếu bằng chứng thực tế; không đánh dấu E2E hoàn thành chỉ từ kết quả mock. Dùng tài liệu chung thay cho bốn file sprint4 dự kiến; tổng kết nằm trong báo cáo kiểm thử và PR.
