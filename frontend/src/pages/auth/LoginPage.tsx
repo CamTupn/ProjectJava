@@ -1,6 +1,11 @@
-
 import { useState, type FormEvent } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+
+import {
+  Link,
+  Navigate,
+  useNavigate,
+} from 'react-router-dom'
+
 import {
   ArrowRight,
   Eye,
@@ -13,112 +18,81 @@ import {
 } from 'lucide-react'
 
 import {
-  demoAccounts,
   getRoleHome,
   useAuth,
-  type UserRole,
 } from '../../auth/AuthContext'
 
-type DemoRole =
-  | 'PLATFORM_SUPER_ADMIN'
-  | 'BRAND_ADMIN'
-  | 'OPERATIONS_MANAGER'
-  | 'TECHNICIAN'
-  | 'INVENTORY_STAFF'
-
-const demoRoleOptions: {
-  role: DemoRole
-  label: string
-}[] = [
-  {
-    role: 'PLATFORM_SUPER_ADMIN',
-    label: 'Super Admin',
-  },
-  {
-    role: 'BRAND_ADMIN',
-    label: 'Brand Admin',
-  },
-  {
-    role: 'OPERATIONS_MANAGER',
-    label: 'Operations Manager',
-  },
-  {
-    role: 'TECHNICIAN',
-    label: 'Technician',
-  },
-  {
-    role: 'INVENTORY_STAFF',
-    label: 'Inventory Staff',
-  },
-]
+import {
+  getApiErrorMessage,
+} from '../../services/apiClient'
 
 export default function LoginPage() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
 
-  const [email, setEmail] = useState('')
+  const [usernameOrEmail, setUsernameOrEmail] =
+    useState('')
+
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const [showPassword, setShowPassword] =
+    useState(false)
+
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Người đã đăng nhập sẽ được chuyển về Dashboard theo role.
   if (user) {
-    return <Navigate to={getRoleHome(user.role)} replace />
+    return (
+      <Navigate
+        to={getRoleHome(user.role)}
+        replace
+      />
+    )
   }
 
-  // Xử lý đăng nhập.
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
     event.preventDefault()
+
+    if (loading) return
+
     setError('')
+
+    if (!usernameOrEmail.trim() || !password) {
+      setError(
+        'Vui lòng nhập đầy đủ thông tin đăng nhập.'
+      )
+      return
+    }
+
     setLoading(true)
 
-    const normalizedEmail = email.trim().toLowerCase()
+    try {
+      const authenticatedUser = await login(
+        usernameOrEmail,
+        password
+      )
 
-    const success = login(normalizedEmail, password)
-
-    setLoading(false)
-
-    if (!success) {
-      setError('Email hoặc mật khẩu không chính xác.')
-      return
+      navigate(
+        getRoleHome(authenticatedUser.role),
+        { replace: true }
+      )
+    } catch (error) {
+      setError(getApiErrorMessage(error))
+    } finally {
+      setLoading(false)
     }
-
-    // Xác định role từ tài khoản demo đã đăng nhập.
-    const account = demoAccounts.find(
-      (item) =>
-        item.email.toLowerCase() === normalizedEmail
-    )
-
-    if (!account) {
-      setError('Không xác định được vai trò tài khoản.')
-      return
-    }
-
-    navigate(getRoleHome(account.role as UserRole), {
-      replace: true,
-    })
-  }
-
-  // Tự động điền tài khoản demo khi chọn vai trò.
-  const fillDemo = (role: DemoRole) => {
-    const account = demoAccounts.find(
-      (item) => item.role === role
-    )
-
-    if (!account) return
-
-    setEmail(account.email)
-    setPassword(account.password)
-    setError('')
   }
 
   return (
     <div className="flex min-h-screen bg-[#F7F6FC]">
+
       {/* LEFT PANEL - BRANDING */}
       <div className="relative hidden w-[48%] flex-col justify-between overflow-hidden bg-[#241B3B] p-12 text-white lg:flex">
+
         {/* Background decorations */}
         <div className="pointer-events-none absolute -right-24 top-20 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-3xl" />
+
         <div className="pointer-events-none absolute -bottom-24 -left-20 h-96 w-96 rounded-full bg-indigo-500/20 blur-3xl" />
 
         {/* Logo */}
@@ -147,15 +121,16 @@ export default function LoginPage() {
 
           <h2 className="text-4xl font-bold leading-tight tracking-tight xl:text-5xl">
             Quản lý hệ thống
+
             <span className="mt-3 block text-fuchsia-300">
               thông minh hơn.
             </span>
           </h2>
 
           <p className="mt-7 max-w-md text-base leading-8 text-violet-100/70">
-            Nền tảng quản lý thương hiệu, máy phân phối nước hoa,
-            sản phẩm, tồn kho và giao dịch trong một không gian
-            thống nhất.
+            Nền tảng quản lý thương hiệu, máy phân phối
+            nước hoa, sản phẩm, tồn kho và giao dịch
+            trong một không gian thống nhất.
           </p>
 
           <div className="mt-10 flex items-center gap-3 text-sm text-violet-100/80">
@@ -163,6 +138,7 @@ export default function LoginPage() {
               size={20}
               className="text-fuchsia-300"
             />
+
             Truy cập theo vai trò quản trị và nhân viên
           </div>
 
@@ -194,6 +170,7 @@ export default function LoginPage() {
       {/* RIGHT PANEL - LOGIN FORM */}
       <div className="flex flex-1 items-center justify-center px-5 py-12 sm:px-10">
         <div className="w-full max-w-[440px]">
+
           {/* Mobile logo */}
           <div className="mb-9 flex items-center gap-3 lg:hidden">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#302344] text-white">
@@ -222,8 +199,8 @@ export default function LoginPage() {
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-slate-500">
-              Đăng nhập vào tài khoản để tiếp tục sử dụng
-              hệ thống quản lý ScentStation.
+              Đăng nhập vào tài khoản để tiếp tục
+              sử dụng hệ thống quản lý ScentStation.
             </p>
           </div>
 
@@ -232,13 +209,14 @@ export default function LoginPage() {
             onSubmit={handleSubmit}
             className="space-y-5"
           >
-            {/* Email */}
+
+            {/* Username or Email */}
             <div>
               <label
-                htmlFor="login-email"
+                htmlFor="login-username"
                 className="mb-2 block text-sm font-semibold text-slate-700"
               >
-                Địa chỉ email
+                Tên đăng nhập hoặc email
               </label>
 
               <div className="relative">
@@ -248,17 +226,20 @@ export default function LoginPage() {
                 />
 
                 <input
-                  id="login-email"
-                  type="email"
+                  id="login-username"
+                  type="text"
                   required
+                  disabled={loading}
                   autoComplete="username"
-                  value={email}
+                  value={usernameOrEmail}
                   onChange={(event) => {
-                    setEmail(event.target.value)
+                    setUsernameOrEmail(
+                      event.target.value
+                    )
                     setError('')
                   }}
-                  placeholder="Nhập địa chỉ email"
-                  className="h-13 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                  placeholder="Nhập username hoặc email"
+                  className="h-13 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-4 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 disabled:opacity-60"
                 />
               </div>
             </div>
@@ -280,8 +261,13 @@ export default function LoginPage() {
 
                 <input
                   id="login-password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={
+                    showPassword
+                      ? 'text'
+                      : 'password'
+                  }
                   required
+                  disabled={loading}
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => {
@@ -289,13 +275,15 @@ export default function LoginPage() {
                     setError('')
                   }}
                   placeholder="Nhập mật khẩu"
-                  className="h-13 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-12 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                  className="h-13 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-12 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-100 disabled:opacity-60"
                 />
 
                 <button
                   type="button"
                   onClick={() =>
-                    setShowPassword((current) => !current)
+                    setShowPassword(
+                      (current) => !current
+                    )
                   }
                   aria-label={
                     showPassword
@@ -337,33 +325,23 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* DEMO ACCOUNTS */}
+          {/* Account information */}
           <div className="mt-8 rounded-2xl border border-violet-100 bg-white p-5">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
               <ShieldCheck
                 size={18}
                 className="text-violet-600"
               />
-              Tài khoản thử nghiệm
+
+              Truy cập hệ thống
             </div>
 
-            <p className="mb-4 text-xs leading-5 text-slate-500">
-              Chỉ sử dụng trong giai đoạn phát triển giao diện.
-              Chọn vai trò để tự động điền email và mật khẩu.
+            <p className="text-xs leading-6 text-slate-500">
+              Tài khoản được cấp bởi quản trị viên.
+              Nếu bạn chưa có tài khoản hoặc không thể
+              đăng nhập, vui lòng liên hệ người quản lý
+              của thương hiệu.
             </p>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {demoRoleOptions.map((option) => (
-                <button
-                  key={option.role}
-                  type="button"
-                  onClick={() => fillDemo(option.role)}
-                  className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium text-slate-700 transition hover:border-violet-400 hover:bg-violet-50"
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* KIOSK LINK */}
@@ -384,8 +362,10 @@ export default function LoginPage() {
           {/* Bottom note */}
           <p className="mt-8 text-center text-xs leading-5 text-slate-400">
             ScentStation Management Platform
+
             <span className="mx-2">•</span>
-            Frontend Demo
+
+            Secure Access
           </p>
         </div>
       </div>

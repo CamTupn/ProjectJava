@@ -1,4 +1,7 @@
-export type TenantStatus = 'ACTIVE' | 'SUSPENDED' | 'INACTIVE'
+export type TenantStatus =
+  | 'ACTIVE'
+  | 'SUSPENDED'
+  | 'INACTIVE'
 
 export interface Tenant {
   id: number
@@ -9,8 +12,14 @@ export interface Tenant {
   updatedAt: string
 }
 
-export interface TenantRequest {
+export interface CreateTenantRequest {
   name: string
   code: string
-  status: TenantStatus
 }
+
+export interface UpdateTenantRequest {
+  name: string
+  code: string
+}
+
+export type TenantRequest = CreateTenantRequest
