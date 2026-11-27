@@ -1,0 +1,11 @@
+# Device accounts: MQTT username MUST equal machineId.
+# Each device can only publish its own status/events and subscribe to its own command.
+pattern write scentstation/%u/status
+pattern write scentstation/%u/event
+pattern read scentstation/%u/command
+
+# Backend account: may publish commands and receive all device status/events.
+user scentstation-backend
+topic write scentstation/+/command
+topic read scentstation/+/status
+topic read scentstation/+/event

@@ -18,3 +18,8 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+# Local Mosquitto credentials and runtime data
+infra/mosquitto/config/passwordfile
+infra/mosquitto/config/aclfile
+infra/mosquitto/data/**
+infra/mosquitto/log/**
