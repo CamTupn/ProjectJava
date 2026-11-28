@@ -81,12 +81,23 @@ public class AuthService {
 
         // Platform Super Admin có thể không thuộc Tenant
         if (user.getTenant() != null) {
+
+            response.setTenantId(
+                user.getTenant().getId()
+                );
             response.setTenantCode(
                     user.getTenant().getCode()
             );
+
+            response.setTenantName(
+                        user.getTenant().getName()
+                );
         }
 
         response.setRoles(roles);
+        response.setMustChangePassword(
+                user.isMustChangePassword()
+        );
         // Generate JWT claims
         Map<String, Object> claims = new HashMap<>();
 
@@ -104,6 +115,7 @@ public class AuthService {
                         : null);
 
         claims.put("roles", roles);
+        claims.put("tokenVersion", user.getTokenVersion());
 
         // Generate access token
         String accessToken = jwtService.generateToken(

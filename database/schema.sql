@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+    token_version BIGINT NOT NULL DEFAULT 0,
     full_name VARCHAR(150) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

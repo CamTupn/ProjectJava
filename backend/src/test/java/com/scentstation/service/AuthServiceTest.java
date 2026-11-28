@@ -21,10 +21,13 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -47,6 +50,7 @@ class AuthServiceTest {
     void setUp() {
         Tenant tenant = new Tenant();
         tenant.setId(1L);
+        tenant.setName("ScentStation Demo");
         tenant.setCode("SCENT-DEMO");
         tenant.setStatus("ACTIVE");
 
@@ -95,7 +99,9 @@ class AuthServiceTest {
         assertEquals("brandadmin", response.getUsername());
         assertEquals("admin@scentstation.com", response.getEmail());
         assertEquals("Brand Administrator", response.getFullName());
+        assertEquals(1L, response.getTenantId());
         assertEquals("SCENT-DEMO", response.getTenantCode());
+        assertEquals("ScentStation Demo", response.getTenantName());
         assertTrue(response.getRoles().contains("BRAND_ADMIN"));
 
         verify(userRepository).findByUsername("brandadmin");
@@ -123,7 +129,9 @@ class AuthServiceTest {
 
         assertNotNull(response);
         assertEquals("brandadmin", response.getUsername());
+        assertEquals(1L, response.getTenantId());
         assertEquals("SCENT-DEMO", response.getTenantCode());
+        assertEquals("ScentStation Demo", response.getTenantName());
     }
 
     // 3. Username hoặc email không tồn tại
@@ -246,9 +254,60 @@ class AuthServiceTest {
         
         assertNotNull(response);
         assertEquals("platformadmin", response.getUsername());
+        assertNull(response.getTenantId());
         assertNull(response.getTenantCode());
+        assertNull(response.getTenantName());
         assertTrue(
             response.getRoles().contains("PLATFORM_SUPER_ADMIN")
         );
+    }
+
+    // 8. Login should include token version in JWT
+    @Test
+    void loginShouldIncludeTokenVersionInJwt() {
+
+            activeUser.setTokenVersion(5L);
+
+            LoginRequest request = createRequest("brandadmin", "Scent123456");
+
+            when(userRepository.findByUsername("brandadmin"))
+                            .thenReturn(Optional.of(activeUser));
+
+            when(passwordEncoder.matches(
+                            "Scent123456", "encoded-password"))
+                            .thenReturn(true);
+
+            authService.login(request);
+
+            verify(jwtService).generateToken(
+                            eq("brandadmin"),
+                            argThat(claims -> Long.valueOf(5L).equals(
+                                            claims.get("tokenVersion"))));
+    }
+
+    // 9. Login with inactive tenant should be rejected
+    @Test
+    void loginWithInactiveTenantShouldThrowException() {
+
+            activeUser.getTenant().setStatus("INACTIVE");
+
+            LoginRequest request = createRequest("brandadmin", "Scent123456");
+
+            when(userRepository.findByUsername("brandadmin"))
+                            .thenReturn(Optional.of(activeUser));
+
+            IllegalArgumentException exception = assertThrows(
+                            IllegalArgumentException.class,
+                            () -> authService.login(request));
+
+            assertEquals(
+                            "Account is not active",
+                            exception.getMessage());
+
+            verify(passwordEncoder, never())
+                            .matches(anyString(), anyString());
+
+            verify(jwtService, never())
+                            .generateToken(anyString(), anyMap());
     }
 }

@@ -189,6 +189,9 @@ Tenant isolation is mandatory: a user belonging to one brand must not read or mo
 | Notifications | GET | `/notifications` | Authenticated user |
 | Notifications | PATCH | `/notifications/{notificationId}` | Notification owner |
 | Audit | GET | `/audit-logs` | PLATFORM_SUPER_ADMIN / authorized staff |
+| Auth | GET | `/auth/me` | Authenticated user |
+| Auth | POST | `/auth/change-password` | Authenticated user |
+| Users | POST | `/users/{id}/reset-password` | PLATFORM_SUPER_ADMIN / BRAND_ADMIN (within authorized tenant scope) |
 
 > Dispensing command creation is an internal backend workflow, not a public customer endpoint. The backend may create a command only after verified payment and a fresh machine/slot safety check. The customer cannot directly request a successful spray.
 
@@ -207,6 +210,89 @@ Both fields nonblank. Username or email lookup, ACTIVE user/tenant, BCrypt match
 {"success":true,"message":"Login successful","data":{"userId":2,"username":"brandadmin","email":"admin@example.com","fullName":"Brand Admin","tenantCode":"DEMO","roles":["BRAND_ADMIN"],"accessToken":"<jwt>"}}
 ```
 Invalid credentials, inactive account/tenant or invalid input: 400 in current implementation. Missing/invalid JWT on protected API: 401; insufficient role: 403. No refreshToken/expiresIn in response. Refresh/logout/me endpoints are not implemented by AuthController; previous designs are future scope. Public registration is removed; anonymous POST register returns 401 as tested.
+
+## 4.2 Account Management & Tenant Identity — implemented 28/11/2026
+
+### Authentication response extension
+
+Login response includes the following additional fields:
+
+| Field | Type | Description |
+|---|---|---|
+| tenantId | Long / null | Tenant identifier |
+| tenantCode | String / null | Tenant code |
+| tenantName | String / null | Tenant display name |
+| mustChangePassword | Boolean | Mandatory password change flag |
+
+Platform Super Admin has no associated tenant.
+
+### GET /api/v1/auth/me
+
+Returns the authenticated user's profile, assigned roles, account status, tenant identity and mandatory password change flag.
+
+- Authentication: Bearer JWT.
+- Success: HTTP 200.
+- Invalid or revoked token: HTTP 401.
+
+### POST /api/v1/auth/change-password
+
+Authentication: Bearer JWT.
+
+Request:
+
+```json
+{
+  "currentPassword": "<current-password>",
+  "newPassword": "<new-password>"
+}
+```
+
+- HTTP 200: Password changed successfully.
+- HTTP 400: Invalid request or incorrect current password.
+- HTTP 401: Invalid or revoked token.
+
+After a successful password change, previously issued tokens are invalidated. The user must authenticate again.
+
+### POST /api/v1/users/{id}/reset-password
+
+Authentication: Bearer JWT.
+
+Request:
+
+```json
+{
+  "temporaryPassword": "<temporary-password>"
+}
+```
+
+Authorization:
+
+- PLATFORM_SUPER_ADMIN: Reset passwords within authorized administrative scope.
+- BRAND_ADMIN: Reset passwords of authorized employees within the same tenant.
+- Other roles: Access denied.
+
+Responses:
+
+- HTTP 200: Password reset successfully.
+- HTTP 400: Invalid request.
+- HTTP 401: Invalid authentication.
+- HTTP 403: Insufficient permission.
+- HTTP 404: User not found or outside tenant scope.
+
+After a successful reset, the account must change its temporary password and previously issued tokens are invalidated.
+
+### Mandatory password change
+
+Users with `mustChangePassword = true` may authenticate and access the profile and password change endpoints.
+
+Protected business API requests are rejected with HTTP 403 and the message `Password change is required`.
+
+### JWT revocation
+
+The backend uses `token_version` to invalidate previously issued JWT access tokens when account security changes.
+
+See [Account Management & Tenant Identity](../features/account-management.md) for implementation details and testing results.
+
 
 # 5. Tenant Management — implemented Sprint 4
 

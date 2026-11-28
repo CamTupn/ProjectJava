@@ -112,3 +112,50 @@ Chuẩn bị schema test 21 bảng và seed 5 role; bật biến môi trường 
 | BUS-12 | `shouldSoftDisableEmptySlot` | Assertion thành công |
 | BUS-13 | `platformAdminShouldReadResourcesAcrossTenants` | Assertion thành công |
 | BUS-14 | `protectedBusinessEndpointsShouldRequireJwt` | Assertion thành công |
+
+## Account Management & Tenant Identity — Test Plan
+
+### Testing objectives
+
+- Verify authentication and tenant identity.
+- Verify current user profile retrieval.
+- Verify password change and administrative password reset.
+- Verify mandatory password change enforcement.
+- Verify JWT revocation.
+- Verify role-based access control and tenant isolation.
+
+### Test scenarios
+
+| ID | Scenario | Expected result |
+|---|---|---|
+| AM-01 | Login with valid credentials | HTTP 200 and tenant identity |
+| AM-02 | Retrieve current user profile | HTTP 200 |
+| AM-03 | Change password successfully | HTTP 200 |
+| AM-04 | Access API using revoked JWT | HTTP 401 |
+| AM-05 | Login with new password | HTTP 200 |
+| AM-06 | Change password with incorrect current password | HTTP 400 |
+| AM-07 | Administrator resets password | HTTP 200 |
+| AM-08 | Login with temporary password | HTTP 200 |
+| AM-09 | Access business API before mandatory password change | HTTP 403 |
+| AM-10 | Complete mandatory password change | HTTP 200 and restored access |
+| AM-11 | Cross-tenant password reset | HTTP 404 |
+| AM-12 | Unauthorized employee password reset | HTTP 403 |
+
+### Testing tools
+
+- JUnit
+- Mockito
+- Spring Boot Test
+- MockMvc
+- Maven Surefire
+- Postman
+- MySQL Test Database
+
+### Acceptance criteria
+
+- All automated tests pass.
+- All planned manual API scenarios pass.
+- Revoked JWTs cannot access protected resources.
+- Unauthorized users cannot reset passwords.
+- Tenant isolation is maintained.
+- Mandatory password changes are enforced by the backend.

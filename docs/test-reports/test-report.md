@@ -749,3 +749,62 @@ Không suy ra coverage 100%, kiểm thử concurrency, commit thực tế ngoài
 | BUS-12 | `shouldSoftDisableEmptySlot` | PASS |
 | BUS-13 | `platformAdminShouldReadResourcesAcrossTenants` | PASS |
 | BUS-14 | `protectedBusinessEndpointsShouldRequireJwt` | PASS |
+
+## Account Management & Tenant Identity — Regression Test Report
+
+Ngày kiểm thử: 28/11/2026.
+
+### Automated Testing
+
+Công cụ: JUnit, Mockito, Spring Boot Test, MockMvc, Maven Surefire và MySQL Test Database.
+
+Lệnh kiểm thử:
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+| Metric | Result |
+|---|---:|
+| Tests run | 420 |
+| Passed | 420 |
+| Failures | 0 |
+| Errors | 0 |
+| Skipped | 0 |
+| Build | SUCCESS |
+
+Số lượng test tăng từ 341 lên 420, bổ sung 79 test so với baseline Sprint 4.
+
+### Manual API Testing — Postman
+
+| ID | Test scenario | Expected | Actual | Result |
+|---|---|---|---|---|
+| AM-01 | Login and tenant identity | 200 | 200 | PASS |
+| AM-02 | Retrieve current profile | 200 | 200 | PASS |
+| AM-03 | Change password | 200 | 200 | PASS |
+| AM-04 | Access using revoked JWT | 401 | 401 | PASS |
+| AM-05 | Login with new password | 200 | 200 | PASS |
+| AM-06 | Incorrect current password | 400 | 400 | PASS |
+| AM-07 | Administrator password reset | 200 | 200 | PASS |
+| AM-08 | Login with temporary password | 200 | 200 | PASS |
+| AM-09 | Business API before mandatory password change | 403 | 403 | PASS |
+| AM-10 | Mandatory password change and restored access | 200 | 200 | PASS |
+| AM-11 | Cross-tenant password reset | 404 | 404 | PASS |
+| AM-12 | Unauthorized employee password reset | 403 | 403 | PASS |
+
+### Conclusion
+
+Backend Account Management đã vượt qua toàn bộ bộ kiểm thử tự động và các kịch bản Postman đã thực hiện.
+
+Các chức năng đã được kiểm chứng:
+
+- Authentication và Tenant Identity.
+- Current User Profile.
+- Change Password.
+- Administrator Password Reset.
+- Mandatory Password Change.
+- JWT Revocation.
+- Role-based Access Control.
+- Tenant Isolation.
+
+Frontend integration và kiểm thử end-to-end toàn hệ thống sẽ được thực hiện trong giai đoạn tiếp theo.

@@ -1,6 +1,7 @@
 package com.scentstation.filter;
 
 import com.scentstation.common.security.CurrentUserPrincipal;
+import com.scentstation.common.response.ApiResponse;
 import com.scentstation.entity.Tenant;
 import com.scentstation.entity.User;
 import com.scentstation.repository.UserRepository;
@@ -18,8 +19,11 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import tools.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -30,9 +34,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
 
     public JwtAuthenticationFilter(
-                JwtService jwtService,
-                UserRepository userRepository
-    ) {
+            JwtService jwtService,
+            UserRepository userRepository) {
+
         this.jwtService = jwtService;
         this.userRepository = userRepository;
     }
@@ -44,109 +48,178 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-         try {
+        User authenticatedUser = null;
+
+        try {
+
             String authorizationHeader =
                     request.getHeader("Authorization");
 
             if (authorizationHeader != null
                     && authorizationHeader.startsWith("Bearer ")) {
 
-                String token = authorizationHeader.substring(7).trim();
+                String token =
+                        authorizationHeader.substring(7).trim();
 
                 if (!token.isEmpty()) {
-                    authenticateToken(token, request);
+                    authenticatedUser =
+                            authenticateToken(token, request);
                 }
             }
 
         } catch (Exception exception) {
-            // Không cho request sử dụng authentication
-            // nếu token hoặc tài khoản không hợp lệ.
+
             SecurityContextHolder.clearContext();
+        }
+
+        // Force password change before accessing other APIs
+        if (authenticatedUser != null
+                && authenticatedUser.isMustChangePassword()
+                && !isAllowedDuringPasswordChange(request)) {
+
+            SecurityContextHolder.clearContext();
+
+            response.setStatus(
+                    HttpServletResponse.SC_FORBIDDEN
+            );
+
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+
+            ApiResponse<Void> body = ApiResponse.error(
+                    "Password change is required",
+                    Map.of()
+            );
+
+            response.getWriter().write(
+                    new ObjectMapper().writeValueAsString(body)
+            );
+
+            return;
         }
 
         filterChain.doFilter(request, response);
     }
 
-    private void authenticateToken(
-            String token,
-            HttpServletRequest request
-    ) {
-        if (SecurityContextHolder.getContext()
-                .getAuthentication() != null) {
-            return;
+    private boolean isAllowedDuringPasswordChange(
+            HttpServletRequest request) {
+
+        String path = request.getRequestURI()
+                .substring(request.getContextPath().length());
+
+        String method = request.getMethod();
+
+        if ("OPTIONS".equals(method)) {
+            return true;
         }
 
-        // 1. Kiểm tra JWT và chữ ký
-        String username = jwtService.extractUsername(token);
+        if ("POST".equals(method)
+                && "/api/v1/auth/login".equals(path)) {
+            return true;
+        }
+
+        if ("GET".equals(method)
+                && "/api/v1/auth/me".equals(path)) {
+            return true;
+        }
+
+        if ("POST".equals(method)
+                && "/api/v1/auth/change-password".equals(path)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private User authenticateToken(
+            String token,
+            HttpServletRequest request) {
+
+        if (SecurityContextHolder.getContext()
+                .getAuthentication() != null) {
+            return null;
+        }
+
+        // 1. Validate JWT
+        String username =
+                jwtService.extractUsername(token);
 
         if (username == null || username.isBlank()) {
-            return;
+            return null;
         }
 
         if (!jwtService.isTokenValid(token, username)) {
-            return;
+            return null;
         }
 
-        // 2. Kiểm tra userId trong token
-        Long tokenUserId = jwtService.extractUserId(token);
+        // 2. Extract user ID and token version
+        Long tokenUserId =
+                jwtService.extractUserId(token);
 
-        if (tokenUserId == null) {
-            return;
+        Long tokenVersion =
+                jwtService.extractTokenVersion(token);
+
+        if (tokenUserId == null
+                || tokenVersion == null) {
+            return null;
         }
 
-        // 3. Lấy User hiện tại từ Database
+        // 3. Load current user from database
         User user = userRepository.findById(tokenUserId)
                 .orElse(null);
 
         if (user == null) {
-            return;
+            return null;
         }
 
-        // 4. Kiểm tra username khớp JWT
+        // 4. Validate username
         if (!username.equals(user.getUsername())) {
-            return;
+            return null;
         }
 
-        // 5. Chỉ cho tài khoản ACTIVE
+        // 5. Reject old tokens
+        if (tokenVersion.longValue()
+                != user.getTokenVersion()) {
+            return null;
+        }
+
+        // 6. Validate account status
         if (!"ACTIVE".equals(user.getStatus())) {
-            return;
+            return null;
         }
 
-        // 6. Kiểm tra Tenant
+        // 7. Validate tenant
         Tenant tenant = user.getTenant();
 
         if (tenant != null
                 && !"ACTIVE".equals(tenant.getStatus())) {
-            return;
+            return null;
         }
 
-        // 7. Lấy role mới nhất từ Database
+        // 8. Load current roles from database
         Set<String> roles = user.getRoles()
                 .stream()
                 .map(role -> role.getCode())
-                .filter(code -> code != null && !code.isBlank())
+                .filter(code ->
+                        code != null && !code.isBlank())
                 .collect(Collectors.toUnmodifiableSet());
 
         if (roles.isEmpty()) {
-            return;
+            return null;
         }
 
-        // 8. Platform Admin không cần Tenant.
-        // Các role khác bắt buộc thuộc Tenant.
         boolean isPlatformAdmin =
                 roles.contains("PLATFORM_SUPER_ADMIN");
 
         if (!isPlatformAdmin && tenant == null) {
-            return;
+            return null;
         }
 
-        // Không cho role Platform Admin
-        // đồng thời gắn vào Tenant.
         if (isPlatformAdmin && tenant != null) {
-            return;
+            return null;
         }
 
-        // 9. Tạo authorities từ quyền hiện tại
+        // 9. Create Spring Security authorities
         List<SimpleGrantedAuthority> authorities =
                 roles.stream()
                         .map(role ->
@@ -164,14 +237,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 ? tenant.getCode()
                 : null;
 
-        // 10. Tạo principal từ Database
+        // 10. Create authenticated principal
         CurrentUserPrincipal principal =
                 new CurrentUserPrincipal(
                         user.getId(),
                         user.getUsername(),
                         tenantId,
                         tenantCode,
-                        roles
+                        roles,
+                        tokenVersion.longValue()
                 );
 
         UsernamePasswordAuthenticationToken authentication =
@@ -186,8 +260,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         .buildDetails(request)
         );
 
-        // 11. Lưu authentication
         SecurityContextHolder.getContext()
                 .setAuthentication(authentication);
+
+        return user;
     }
 }
