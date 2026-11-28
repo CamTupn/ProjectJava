@@ -6,7 +6,12 @@ import {
   type ReactNode,
 } from 'react'
 
-import { authService } from '../services/authService'
+import {
+  authService,
+  type LoginResponse,
+  type ProfileResponse,
+  type ChangePasswordRequest,
+} from '../services/authService'
 
 import {
   AUTH_STORAGE_KEY,
@@ -27,7 +32,10 @@ export interface AuthUser {
   email: string
   role: UserRole
   roles: UserRole[]
+  tenantId: number | null
   tenantCode: string | null
+  tenantName: string | null
+  mustChangePassword: boolean
 }
 
 interface AuthSession {
@@ -38,11 +46,20 @@ interface AuthSession {
 interface AuthContextType {
   user: AuthUser | null
   isAuthenticated: boolean
+  mustChangePassword: boolean
+
   login: (
     usernameOrEmail: string,
     password: string
   ) => Promise<AuthUser>
+
   logout: () => void
+
+  refreshProfile: () => Promise<AuthUser>
+
+  changePassword: (
+    request: ChangePasswordRequest
+  ) => Promise<void>
 }
 
 const ROLE_PRIORITY: UserRole[] = [
@@ -72,6 +89,14 @@ export function getRoleHome(role: UserRole): string {
   }
 }
 
+export function getAuthHome(user: AuthUser): string {
+  if (user.mustChangePassword) {
+    return '/change-password'
+  }
+
+  return getRoleHome(user.role)
+}
+
 function getTokenExpiration(
   token: string
 ): number | null {
@@ -92,6 +117,35 @@ function getTokenExpiration(
   }
 }
 
+function mapAuthUser(
+  response: LoginResponse | ProfileResponse
+): AuthUser {
+  const roles = ROLE_PRIORITY.filter((role) =>
+    response.roles.includes(role)
+  )
+
+  const primaryRole = roles[0]
+
+  if (!primaryRole) {
+    throw new Error(
+      'Tài khoản không có vai trò hợp lệ.'
+    )
+  }
+
+  return {
+    id: String(response.userId),
+    name: response.fullName || response.username,
+    username: response.username,
+    email: response.email,
+    role: primaryRole,
+    roles,
+    tenantId: response.tenantId,
+    tenantCode: response.tenantCode,
+    tenantName: response.tenantName,
+    mustChangePassword: response.mustChangePassword,
+  }
+}
+
 function getStoredSession(): AuthSession | null {
   try {
     const stored = localStorage.getItem(
@@ -105,7 +159,10 @@ function getStoredSession(): AuthSession | null {
     if (
       !session.user ||
       !session.accessToken ||
-      !ROLE_PRIORITY.includes(session.user.role)
+      !ROLE_PRIORITY.includes(session.user.role) ||
+      typeof session.user.mustChangePassword !== 'boolean' ||
+      !('tenantId' in session.user) ||
+      !('tenantName' in session.user)
     ) {
       localStorage.removeItem(AUTH_STORAGE_KEY)
       return null
@@ -140,6 +197,22 @@ export function AuthProvider({
     useState<AuthSession | null>(getStoredSession)
 
   const user = session?.user ?? null
+
+  const saveSession = (newSession: AuthSession) => {
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify(newSession)
+    )
+
+    setSession(newSession)
+  }
+
+  const logout = () => {
+    localStorage.removeItem(AUTH_STORAGE_KEY)
+    localStorage.removeItem('scentstation_demo_auth')
+
+    setSession(null)
+  }
 
   useEffect(() => {
     localStorage.removeItem(
@@ -219,18 +292,6 @@ export function AuthProvider({
       password,
     })
 
-    const roles = ROLE_PRIORITY.filter((role) =>
-      response.roles.includes(role)
-    )
-
-    const primaryRole = roles[0]
-
-    if (!primaryRole) {
-      throw new Error(
-        'Tài khoản không có vai trò hợp lệ.'
-      )
-    }
-
     const expiration = getTokenExpiration(
       response.accessToken
     )
@@ -241,38 +302,50 @@ export function AuthProvider({
       )
     }
 
-    const authUser: AuthUser = {
-      id: String(response.userId),
-      name: response.fullName || response.username,
-      username: response.username,
-      email: response.email,
-      role: primaryRole,
-      roles,
-      tenantCode: response.tenantCode,
-    }
+    const authUser = mapAuthUser(response)
 
-    const authSession: AuthSession = {
+    saveSession({
       user: authUser,
       accessToken: response.accessToken,
-    }
-
-    localStorage.setItem(
-      AUTH_STORAGE_KEY,
-      JSON.stringify(authSession)
-    )
-
-    setSession(authSession)
+    })
 
     return authUser
   }
 
-  const logout = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY)
-    localStorage.removeItem(
-      'scentstation_demo_auth'
-    )
+  const refreshProfile = async (): Promise<AuthUser> => {
+    if (!session) {
+      throw new Error('Bạn chưa đăng nhập.')
+    }
 
-    setSession(null)
+    const response = await authService.getProfile()
+
+    const currentSession = getStoredSession()
+
+    if (
+      !currentSession ||
+      currentSession.accessToken !== session.accessToken
+    ) {
+      throw new Error('Phiên đăng nhập đã thay đổi.')
+    }
+
+    const updatedUser = mapAuthUser(response)
+
+    saveSession({
+      user: updatedUser,
+      accessToken: currentSession.accessToken,
+    })
+
+    return updatedUser
+  }
+
+  const changePassword = async (
+    request: ChangePasswordRequest
+  ): Promise<void> => {
+    await authService.changePassword(request)
+
+    // Backend revokes previously issued JWTs.
+    // User must log in again with the new password.
+    logout()
   }
 
   return (
@@ -280,8 +353,12 @@ export function AuthProvider({
       value={{
         user,
         isAuthenticated: user !== null,
+        mustChangePassword:
+          user?.mustChangePassword ?? false,
         login,
         logout,
+        refreshProfile,
+        changePassword,
       }}
     >
       {children}

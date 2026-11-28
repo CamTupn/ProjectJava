@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import AccountMenu from '../components/common/AccountMenu'
 import {
   NavLink,
   Outlet,
@@ -109,6 +110,8 @@ export default function StaffLayout({
 
   const config = staffConfigs[role]
 
+  const tenantName = user?.tenantName || user?.tenantCode || 'Thương hiệu'
+
   const handleLogout = () => {
     logout()
     navigate('/login', { replace: true })
@@ -138,6 +141,20 @@ export default function StaffLayout({
         <p className="mt-1 text-xs text-violet-200/70">
           {user?.name}
         </p>
+
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <p className="text-xs text-violet-200/60">
+            Thương hiệu / Brand
+          </p>
+
+          <p className="mt-1 break-words text-sm font-semibold text-white">
+            {tenantName}
+          </p>
+
+          <p className="mt-1 text-xs text-violet-200/60">
+            {user?.tenantCode}
+          </p>
+        </div>
       </div>
 
       <nav className="mt-7 flex-1 space-y-1 px-3">
@@ -225,14 +242,12 @@ export default function StaffLayout({
                 {config.subtitle}
               </h2>
               <p className="text-xs text-slate-500">
-                {config.title}
+                {tenantName} · {config.title}
               </p>
             </div>
           </div>
 
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 font-bold text-violet-700">
-            {user?.name.charAt(0).toUpperCase() ?? 'U'}
-          </div>
+          <AccountMenu />
         </header>
 
         <main className="mx-auto max-w-7xl p-5 sm:p-8">

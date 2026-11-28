@@ -45,3 +45,7 @@ export const USER_STATUS_LABELS: Record<UserStatus, string> = {
   LOCKED: 'Đã khóa / Locked',
   INACTIVE: 'Ngừng hoạt động / Inactive',
 }
+
+export interface ResetPasswordRequest {
+  temporaryPassword: string
+}

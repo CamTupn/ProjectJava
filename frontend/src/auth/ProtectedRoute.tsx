@@ -20,6 +20,7 @@ export default function ProtectedRoute({
   const { user } = useAuth()
   const location = useLocation()
 
+  // 1. Authentication
   if (!user) {
     return (
       <Navigate
@@ -30,6 +31,17 @@ export default function ProtectedRoute({
     )
   }
 
+  // 2. Mandatory password change
+  if (user.mustChangePassword) {
+    return (
+      <Navigate
+        to="/change-password"
+        replace
+      />
+    )
+  }
+
+  // 3. Role-based authorization
   if (!allowedRoles.includes(user.role)) {
     return (
       <Navigate
@@ -39,5 +51,6 @@ export default function ProtectedRoute({
     )
   }
 
+  // 4. Authorized access
   return <Outlet />
 }

@@ -11,6 +11,7 @@ import {
   Lock,
   RefreshCw,
   X,
+  KeyRound,
 } from 'lucide-react'
 
 import { useAuth } from '../../../auth/AuthContext'
@@ -30,6 +31,7 @@ import {
 } from '../../../types/user'
 
 import UserForm from './UserForm'
+import ResetPasswordModal from '../../../components/users/ResetPasswordModal'
 
 const statuses: UserStatus[] = [
   'ACTIVE',
@@ -88,6 +90,7 @@ export default function UsersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null)
 
   const loadData = async () => {
     setLoading(true)
@@ -165,6 +168,26 @@ export default function UsersPage() {
 
   const isCurrentUser = (target: User) =>
     String(target.id) === String(currentUser?.id)
+
+  const canResetPassword = (target: User) => {
+    if (!currentUser || isCurrentUser(target)) {
+      return false
+    }
+    if (target.roles.includes('PLATFORM_SUPER_ADMIN')) {
+      return false
+    }
+    if (currentUser.role === 'PLATFORM_SUPER_ADMIN') {
+      return true
+    }
+    if (currentUser.role !== 'BRAND_ADMIN') {
+      return false
+    }
+    if (target.tenantId === null || target.tenantId !== currentUser.tenantId)
+    {
+      return false
+    }
+    return !target.roles.includes('BRAND_ADMIN')
+  }
 
   const filteredUsers = useMemo(() => {
     const search = keyword.trim().toLowerCase()
@@ -264,6 +287,16 @@ export default function UsersPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const openResetPassword = (target: User) => {
+    if (!canResetPassword(target)) {
+      return
+    }
+
+    setError('')
+    setSuccess('')
+    setResetPasswordUser(target)
   }
 
   const handleCreate = async (data: CreateUserRequest) => {
@@ -629,6 +662,18 @@ export default function UsersPage() {
                                 </option>
                               ))}
                             </select>
+                            {canResetPassword(item) && (
+                              <button
+                                type="button"
+                                title="Đặt lại mật khẩu / Reset Password"
+                                aria-label="Reset password"
+                                disabled={busy}
+                                onClick={() => openResetPassword(item)}
+                                className="rounded-lg bg-amber-50 p-2 text-amber-600 transition hover:bg-amber-100 disabled:opacity-50"
+                              >
+                                <KeyRound size={17} />
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -669,6 +714,22 @@ export default function UsersPage() {
         />
       )}
 
+      {/* Reset password modal */}
+      {resetPasswordUser && (
+        <ResetPasswordModal
+          user={resetPasswordUser}
+          onClose={() => setResetPasswordUser(null)}
+          onSuccess={() => {
+            setResetPasswordUser(null)
+
+            setSuccess(
+              'Đặt lại mật khẩu thành công. ' +
+              'Người dùng phải đổi mật khẩu khi đăng nhập lại.'
+            )
+          }}
+        />
+      )}
+      
       {/* User detail modal */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

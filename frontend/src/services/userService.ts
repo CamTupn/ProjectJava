@@ -5,6 +5,7 @@ import type {
   UserStatus,
   CreateUserRequest,
   UpdateUserRequest,
+  ResetPasswordRequest,
 } from '../types/user'
 
 export const userService = {
@@ -65,5 +66,16 @@ export const userService = {
     )
 
     return response.data
+  },
+
+  // POST /api/v1/users/{id}/reset-password
+  async resetPassword(
+    id: number,
+    data: ResetPasswordRequest
+  ): Promise<void> {
+    await apiClient.post(
+      `/users/${id}/reset-password`,
+      data
+    )
   },
 }

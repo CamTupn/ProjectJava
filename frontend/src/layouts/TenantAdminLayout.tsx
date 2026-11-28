@@ -7,11 +7,20 @@ import {
   X,
 } from 'lucide-react'
 
+import { useAuth } from '../auth/AuthContext'
+import AccountMenu from '../components/common/AccountMenu'
 import TenantAdminSidebar from '../components/tenant-admin/TenantAdminSidebar'
 
 export default function TenantAdminLayout() {
+  const { user } = useAuth()
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+
+  const tenantName =
+    user?.tenantName ||
+    user?.tenantCode ||
+    'Thương hiệu'
 
   useEffect(() => {
     setSidebarOpen(false)
@@ -43,7 +52,9 @@ export default function TenantAdminLayout() {
       {/* Sidebar */}
       <div
         className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          sidebarOpen
+            ? 'translate-x-0'
+            : '-translate-x-full'
         }`}
       >
         <TenantAdminSidebar />
@@ -73,8 +84,8 @@ export default function TenantAdminLayout() {
             <Menu size={24} />
           </button>
 
-          <span className="ml-3 font-bold text-[#202124]">
-            ScentStation
+          <span className="ml-3 truncate font-bold text-[#202124]">
+            {tenantName}
           </span>
         </div>
 
@@ -82,12 +93,12 @@ export default function TenantAdminLayout() {
         <header className="sticky top-0 z-30 flex min-h-20 items-center justify-between gap-4 border-b border-[#DCE8FF] bg-white px-4 py-3 sm:px-6 lg:px-8">
 
           <div className="min-w-0">
-            <h1 className="text-base font-bold text-[#202124] sm:text-lg">
-              Tenant Admin Dashboard
+            <h1 className="truncate text-base font-bold text-[#202124] sm:text-lg">
+              {tenantName} Dashboard
             </h1>
 
-            <p className="hidden text-sm text-[#95877C] sm:block">
-              Quản lý hoạt động thương hiệu ScentStation
+            <p className="hidden truncate text-sm text-[#95877C] sm:block">
+              Quản lý hoạt động thương hiệu {tenantName}
             </p>
           </div>
 
@@ -114,24 +125,13 @@ export default function TenantAdminLayout() {
               className="relative text-[#64748B] hover:text-[#4F5FE8]"
             >
               <Bell size={22} />
+
               <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
             </button>
 
-            {/* Account display */}
-            <div className="flex items-center gap-3 border-l border-[#E2E8F0] pl-3 sm:pl-5">
-
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEF0FF] font-semibold text-[#4F5FE8]">
-                BA
-              </div>
-
-              <div className="hidden text-left xl:block">
-                <p className="text-sm font-semibold text-[#202124]">
-                  Brand Admin
-                </p>
-                <p className="text-xs text-[#95877C]">
-                  Tenant Administrator
-                </p>
-              </div>
+            {/* Account menu */}
+            <div className="border-l border-[#E2E8F0] pl-3 sm:pl-5">
+              <AccountMenu />
             </div>
 
           </div>

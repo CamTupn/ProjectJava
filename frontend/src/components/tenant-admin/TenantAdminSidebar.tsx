@@ -1,6 +1,10 @@
-import { NavLink } from 'react-router-dom'
-import { useNavigate } from 'react-router-dom'
+import {
+  NavLink,
+  useNavigate,
+} from 'react-router-dom'
+
 import { useAuth } from '../../auth/AuthContext'
+
 import {
   Wind,
   LayoutDashboard,
@@ -18,14 +22,47 @@ import {
 } from 'lucide-react'
 
 const menuItems = [
-  { label: 'Tổng quan', path: '/tenant-admin/dashboard', icon: LayoutDashboard, end: true },
-  { label: 'Người dùng', path: '/tenant-admin/users', icon: Users },
-  { label: 'Địa điểm', path: '/tenant-admin/locations', icon: MapPin },
-  { label: 'Sản phẩm', path: '/tenant-admin/products', icon: Package },
-  { label: 'Máy nước hoa', path: '/tenant-admin/machines', icon: Cpu },
-  { label: 'Khe máy', path: '/tenant-admin/slots', icon: Layers },
-  { label: 'Đơn hàng', path: '/tenant-admin/orders', icon: ShoppingCart },
-  { label: 'Báo cáo & Thống kê', path: '/tenant-admin/reports', icon: ChartColumn },
+  {
+    label: 'Tổng quan',
+    path: '/tenant-admin/dashboard',
+    icon: LayoutDashboard,
+    end: true,
+  },
+  {
+    label: 'Người dùng',
+    path: '/tenant-admin/users',
+    icon: Users,
+  },
+  {
+    label: 'Địa điểm',
+    path: '/tenant-admin/locations',
+    icon: MapPin,
+  },
+  {
+    label: 'Sản phẩm',
+    path: '/tenant-admin/products',
+    icon: Package,
+  },
+  {
+    label: 'Máy nước hoa',
+    path: '/tenant-admin/machines',
+    icon: Cpu,
+  },
+  {
+    label: 'Khe máy',
+    path: '/tenant-admin/slots',
+    icon: Layers,
+  },
+  {
+    label: 'Đơn hàng',
+    path: '/tenant-admin/orders',
+    icon: ShoppingCart,
+  },
+  {
+    label: 'Báo cáo & Thống kê',
+    path: '/tenant-admin/reports',
+    icon: ChartColumn,
+  },
 ]
 
 const navClass = (active: boolean) =>
@@ -36,18 +73,23 @@ const navClass = (active: boolean) =>
   }`
 
 export default function TenantAdminSidebar() {
-  const tenantName = 'ScentStation Demo'
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
+
+  const tenantName =
+    user?.tenantName ||
+    user?.tenantCode ||
+    'Thương hiệu'
 
   const handleLogout = () => {
     logout()
     navigate('/login', { replace: true })
   }
+
   return (
     <aside className="flex h-full w-64 flex-col overflow-hidden bg-[#302344] text-white">
 
-      {/* Brand */}
+      {/* Platform Brand */}
       <div className="flex h-[88px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
 
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-400 to-violet-600 shadow-lg shadow-purple-950/30">
@@ -58,14 +100,15 @@ export default function TenantAdminSidebar() {
           <h1 className="truncate text-lg font-bold tracking-tight">
             ScentStation
           </h1>
+
           <p className="text-[11px] text-violet-200/60">
             Brand Management
           </p>
         </div>
       </div>
 
-      {/* Tenant Information */}
-      <div className="px-4 pt-5">
+      {/* Dynamic Tenant Information */}
+      <div className="shrink-0 px-4 pt-5">
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-3.5">
 
@@ -77,12 +120,22 @@ export default function TenantAdminSidebar() {
             </p>
           </div>
 
-          <p className="truncate text-sm font-bold text-white">
+          <p
+            title={tenantName}
+            className="truncate text-sm font-bold text-white"
+          >
             {tenantName}
           </p>
 
+          {user?.tenantCode && (
+            <p className="mt-1 truncate text-[11px] text-violet-200/60">
+              {user.tenantCode}
+            </p>
+          )}
+
           <div className="mt-3 flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
+
             <span className="text-xs text-violet-200/80">
               Không gian quản lý
             </span>
@@ -110,7 +163,9 @@ export default function TenantAdminSidebar() {
                 key={item.path}
                 to={item.path}
                 end={item.end}
-                className={({ isActive }) => navClass(isActive)}
+                className={({ isActive }) =>
+                  navClass(isActive)
+                }
               >
                 {({ isActive }) => (
                   <>
@@ -127,7 +182,9 @@ export default function TenantAdminSidebar() {
                       }
                     />
 
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1">
+                      {item.label}
+                    </span>
 
                     {isActive && (
                       <span className="h-1.5 w-1.5 rounded-full bg-fuchsia-300" />
@@ -145,7 +202,9 @@ export default function TenantAdminSidebar() {
 
         <NavLink
           to="/tenant-admin/settings"
-          className={({ isActive }) => navClass(isActive)}
+          className={({ isActive }) =>
+            navClass(isActive)
+          }
         >
           <Settings size={19} />
           <span>Cài đặt thương hiệu</span>

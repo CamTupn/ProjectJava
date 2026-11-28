@@ -4,6 +4,7 @@ import {
   Link,
   Navigate,
   useNavigate,
+  useLocation,
 } from 'react-router-dom'
 
 import {
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react'
 
 import {
-  getRoleHome,
+  getAuthHome,
   useAuth,
 } from '../../auth/AuthContext'
 
@@ -29,6 +30,10 @@ import {
 export default function LoginPage() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const passwordChanged =
+    location.state?.passwordChanged === true
 
   const [usernameOrEmail, setUsernameOrEmail] =
     useState('')
@@ -43,7 +48,7 @@ export default function LoginPage() {
   if (user) {
     return (
       <Navigate
-        to={getRoleHome(user.role)}
+        to={getAuthHome(user)}
         replace
       />
     )
@@ -74,7 +79,7 @@ export default function LoginPage() {
       )
 
       navigate(
-        getRoleHome(authenticatedUser.role),
+        getAuthHome(authenticatedUser),
         { replace: true }
       )
     } catch (error) {
@@ -203,7 +208,27 @@ export default function LoginPage() {
               sử dụng hệ thống quản lý ScentStation.
             </p>
           </div>
+          {passwordChanged && (
+            <div
+              role="status"
+              className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"
+            >
+              <ShieldCheck
+                size={21}
+                className="shrink-0"
+              />
 
+              <div>
+                <p className="font-semibold">
+                  Đổi mật khẩu thành công!
+                </p>
+
+                <p className="mt-1 text-xs leading-5">
+                  Vui lòng đăng nhập lại bằng mật khẩu mới.
+                </p>
+              </div>
+            </div>
+          )}
           {/* LOGIN FORM */}
           <form
             onSubmit={handleSubmit}
