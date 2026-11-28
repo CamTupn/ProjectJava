@@ -1071,3 +1071,53 @@ Latest verified run: 341 tests, 0 failures/errors/skipped (27/11/2026). To run o
 Thay đổi phạm vi TASK-014/015: không tự đăng ký công khai; `RegisterRequest` đã xóa, `/api/v1/auth/register` không có controller và không còn public. Platform Super Admin được khởi tạo ngoài API cấp tài khoản. Platform Super Admin tạo tenant và cấp Brand Admin hoặc nhân viên cho tenant ACTIVE; Brand Admin chỉ cấp Operations Manager, Technician, Inventory Staff trong tenant của mình. Không role nào được tạo Platform Super Admin qua API. Login vẫn public, JWT bắt buộc cho API quản lý. Đây là thay đổi yêu cầu cần được nhóm xác nhận khi nghiệm thu, không phải hoàn thành Register theo issue cũ.
 
 Run all integration classes: `./mvnw.cmd test "-Dtest=DatabaseIntegrationTest,AuthenticationIntegrationTest,BusinessFlowIntegrationTest"` (PowerShell). Expected 39 tests. Authentication/BusinessFlow use test-only fixtures and rollback. Never use real credentials as fixture constants.
+
+## Account Management & Tenant Identity
+
+The backend supports:
+
+- Authentication with tenant identity.
+- Current user profile.
+- Password change.
+- Administrative password reset.
+- Mandatory password change.
+- JWT revocation using token version.
+- Role-based access control and tenant isolation.
+
+### API endpoints
+
+| Method | Endpoint |
+|---|---|
+| POST | /api/v1/auth/login |
+| GET | /api/v1/auth/me |
+| POST | /api/v1/auth/change-password |
+| POST | /api/v1/users/{id}/reset-password |
+
+### Database requirements
+
+Existing databases must apply the migration:
+
+`database/migrations/001_account_security.sql`
+
+Apply the migration before starting the updated backend. New databases should use the updated schema.sql.
+
+See [Database README](../database/README.md) for migration instructions.
+
+### Authentication behavior
+
+- Login accepts usernameOrEmail and password.
+- Authentication responses include tenant identity and mustChangePassword.
+- Users must change temporary passwords before accessing protected business APIs.
+- Password changes and resets invalidate previously issued JWTs.
+- Users must authenticate again after changing their passwords.
+
+### Testing results
+
+- Automated tests: 420/420 passed.
+- Manual API testing: 12/12 planned scenarios passed.
+
+### Documentation
+
+- [Account Management](../docs/features/account-management.md)
+- [API Specification](../docs/api/api-specification.md)
+- [Test Report](../docs/test-reports/test-report.md)

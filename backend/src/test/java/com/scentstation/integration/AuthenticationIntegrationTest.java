@@ -42,6 +42,7 @@ class AuthenticationIntegrationTest {
     private PasswordEncoder passwordEncoder;
 
     private static final String PASSWORD = "IntegrationTest@123";
+    private static final String NEW_PASSWORD = "IntegrationChanged@456";
 
     private String suffix;
     private String adminUsername;
@@ -310,6 +311,7 @@ class AuthenticationIntegrationTest {
         .andExpect(jsonPath("$.data.tenantCode")
                 .value(tenantCode("A")))
         .andExpect(jsonPath("$.data.roles[0]").value("BRAND_ADMIN"))
+        .andExpect(jsonPath("$.data.mustChangePassword").value(true))
         .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
     }
 
@@ -369,7 +371,7 @@ class AuthenticationIntegrationTest {
                 "BRAND_ADMIN"
         );
 
-        String brandToken = login(brandUsername, PASSWORD);
+        String brandToken = loginAfterPasswordChange(brandUsername);
 
         String employeeUsername = "it_employee_" + suffix;
 
@@ -389,7 +391,7 @@ class AuthenticationIntegrationTest {
 
         assertEquals(tenantId, actualTenantId);
 
-        String employeeToken = login(employeeUsername, PASSWORD);
+        String employeeToken = loginAfterPasswordChange(employeeUsername);
 
         assertNotNull(employeeToken);
         assertFalse(employeeToken.isBlank());
@@ -487,7 +489,7 @@ class AuthenticationIntegrationTest {
                 "TECHNICIAN"
         );
 
-        String technicianToken = login(username, PASSWORD);
+        String technicianToken = loginAfterPasswordChange(username);
 
         mockMvc.perform(
                 get("/api/v1/users")
@@ -521,7 +523,7 @@ class AuthenticationIntegrationTest {
                 "BRAND_ADMIN"
         );
 
-        String brandToken = login(username, PASSWORD);
+        String brandToken = loginAfterPasswordChange(username);
 
         mockMvc.perform(
                 post("/api/v1/users")
@@ -578,7 +580,7 @@ class AuthenticationIntegrationTest {
                 "BRAND_ADMIN"
         );
 
-        String brandToken = login(brandUsername, PASSWORD);
+        String brandToken = loginAfterPasswordChange(brandUsername);
 
         mockMvc.perform(
                 get("/api/v1/users/{id}", otherUserId)
@@ -646,7 +648,7 @@ class AuthenticationIntegrationTest {
                 "BRAND_ADMIN"
         );
 
-        String brandToken = login(username, PASSWORD);
+        String brandToken = loginAfterPasswordChange(username);
 
         mockMvc.perform(
                 get("/api/v1/users")
@@ -689,7 +691,7 @@ class AuthenticationIntegrationTest {
                 "BRAND_ADMIN"
         );
 
-        String brandToken = login(username, PASSWORD);
+        String brandToken = loginAfterPasswordChange(username);
 
         mockMvc.perform(
                 post("/api/v1/tenants")
@@ -738,6 +740,59 @@ class AuthenticationIntegrationTest {
                 result.getResponse().getContentAsString(),
                 "$.data.accessToken"
         );
+    }
+
+    private String loginAfterPasswordChange(
+                    String username) throws Exception {
+
+            // 1. Login with temporary password
+            String temporaryToken = login(username, PASSWORD);
+
+            // 2. Verify forced password change flag
+            mockMvc.perform(
+                            get("/api/v1/auth/me")
+                                            .header(
+                                                            "Authorization",
+                                                            bearer(temporaryToken)))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.data.mustChangePassword").value(true));
+
+            // 3. Change temporary password
+            mockMvc.perform(
+                            post("/api/v1/auth/change-password")
+                                            .header(
+                                                            "Authorization",
+                                                            bearer(temporaryToken))
+                                            .contentType("application/json")
+                                            .content("""
+                                                            {
+                                                                "currentPassword": "%s",
+                                                                "newPassword": "%s"
+                                                            }
+                                                            """.formatted(PASSWORD, NEW_PASSWORD)))
+                            .andExpect(status().isOk());
+
+            // 4. Verify old JWT is revoked
+            mockMvc.perform(
+                            get("/api/v1/auth/me")
+                                            .header(
+                                                            "Authorization",
+                                                            bearer(temporaryToken)))
+                            .andExpect(status().isUnauthorized());
+
+            // 5. Login again with new password
+            String newToken = login(username, NEW_PASSWORD);
+
+            // 6. Verify password change is completed
+            mockMvc.perform(
+                            get("/api/v1/auth/me")
+                                            .header(
+                                                            "Authorization",
+                                                            bearer(newToken)))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.data.mustChangePassword").value(false));
+
+            return newToken;
     }
 
     private Long createTenant(

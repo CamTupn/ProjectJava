@@ -60,6 +60,8 @@ Lưu tài khoản quản trị và nhân viên vận hành.
 | `username` | VARCHAR(100) | NN, UQ | Tên đăng nhập, đề xuất duy nhất toàn hệ thống |
 | `email` | VARCHAR(255) | NN, UQ | Email, đề xuất duy nhất toàn hệ thống |
 | `password_hash` | VARCHAR(255) | NN | Chuỗi băm mật khẩu, không lưu mật khẩu thuần |
+| `must_change_password` | BOOLEAN | NN, DEFAULT FALSE | Yêu cầu người dùng thay đổi mật khẩu |
+| `token_version` | BIGINT | NN, DEFAULT 0 | Phiên bản token dùng để thu hồi JWT đã cấp |
 | `full_name` | VARCHAR(150) | NN | Họ tên |
 | `status` | VARCHAR(20) | NN, DEFAULT 'ACTIVE' | ACTIVE/LOCKED/INACTIVE |
 | `created_at` | DATETIME | NN, DEFAULT CURRENT_TIMESTAMP | Thời điểm tạo |
@@ -420,3 +422,20 @@ Thay đổi phạm vi TASK-014/015: không tự đăng ký công khai; `Register
 - GET user/tenant: Platform toàn hệ thống, Brand Admin trong tenant; ngoài scope 404. PUT user chỉ fullName/email; PATCH status ACTIVE/LOCKED/INACTIVE; Brand Admin không sửa tài khoản quản trị, không tự khóa/vô hiệu hóa. PUT tenant cập nhật name/code, Brand Admin chỉ tenant mình. Không có API đổi role hay xóa tenant trong phạm vi này.
 
 Không thay đổi DDL: đây là ràng buộc service, không phải CHECK/FK mới. user_roles vẫn là bảng nối; API cấp tài khoản chỉ gán một role.
+
+## Account Management — Database Migration (28/11/2026)
+
+Bảng `users` được bổ sung hai cột bảo mật:
+
+- `must_change_password`: kiểm soát yêu cầu đổi mật khẩu bắt buộc.
+- `token_version`: hỗ trợ vô hiệu hóa JWT đã cấp trước đó.
+
+Hai cột được ánh xạ trong entity `User` thông qua JPA/Hibernate.
+
+Migration: `database/migrations/001_account_security.sql`.
+
+Schema dành cho database mới đã được cập nhật tương ứng.
+
+Không bổ sung bảng mới, không thay đổi khóa chính, khóa ngoại hoặc quan hệ giữa các bảng. Tổng số bảng vẫn là 21.
+
+Database đã tồn tại cần chạy migration một lần trước khi sử dụng phiên bản backend mới.
