@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.shape.Circle?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.scentstation.simulator.ui.SimulatorController"
+            styleClass="root-pane">
+
+    <top>
+        <HBox spacing="14" alignment="CENTER_LEFT" styleClass="top-header">
+            <padding><Insets top="12" right="18" bottom="12" left="18"/></padding>
+            <Label text="ScentStation IoT Device Simulator" styleClass="app-title"/>
+            <Label text="ESP32 Virtual Hardware Node" styleClass="app-subtitle"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="connectionBadgeLabel" text="OFFLINE" styleClass="status-badge, badge-offline"/>
+        </HBox>
+    </top>
+
+    <center>
+        <SplitPane dividerPositions="0.33, 0.70" styleClass="main-split">
+            <!-- LEFT COLUMN: CONNECTION & SCENARIO -->
+            <ScrollPane fitToWidth="true" styleClass="panel-scroll">
+                <VBox spacing="12" styleClass="card-panel">
+                    <padding><Insets top="14" right="14" bottom="14" left="14"/></padding>
+
+                    <Label text="1. Device &amp; MQTT Configuration" styleClass="section-title"/>
+
+                    <Label text="Broker URL" styleClass="field-label"/>
+                    <TextField fx:id="brokerUrlField" promptText="tcp://localhost:1883"/>
+
+                    <Label text="Machine ID (MQTT Topic &amp; ACL Username)" styleClass="field-label"/>
+                    <TextField fx:id="machineIdField" promptText="simulator-001"/>
+
+                    <Label text="Device Identity" styleClass="field-label"/>
+                    <TextField fx:id="deviceIdentityField" promptText="simulator-device-001"/>
+
+                    <Label text="MQTT Username" styleClass="field-label"/>
+                    <TextField fx:id="usernameField" promptText="simulator-001"/>
+
+                    <Label text="MQTT Password (Not persisted)" styleClass="field-label"/>
+                    <PasswordField fx:id="passwordField" promptText="Enter broker password"/>
+
+                    <HBox spacing="8">
+                        <Button fx:id="connectButton" text="Connect Device" onAction="#handleConnect"
+                                maxWidth="Infinity" HBox.hgrow="ALWAYS" styleClass="btn-primary"/>
+                        <Button fx:id="disconnectButton" text="Disconnect" onAction="#handleDisconnect"
+                                disable="true" styleClass="btn-danger"/>
+                    </HBox>
+
+                    <Separator/>
+
+                    <Label text="2. Simulation Scenario" styleClass="section-title"/>
+                    <ComboBox fx:id="scenarioComboBox" maxWidth="Infinity"/>
+
+                    <Separator/>
+
+                    <Label text="3. Pump &amp; Nozzle Hardware State" styleClass="section-title"/>
+                    <HBox spacing="10" alignment="CENTER_LEFT" styleClass="hardware-box">
+                        <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+                        <Circle fx:id="sprayPulseCircle" radius="12" visible="false" styleClass="spray-circle"/>
+                        <VBox spacing="4">
+                            <HBox spacing="6" alignment="CENTER_LEFT">
+                                <Label text="Pump State:" styleClass="field-label"/>
+                                <Label fx:id="pumpStateLabel" text="IDLE" styleClass="pump-badge, pump-idle"/>
+                            </HBox>
+                            <Label fx:id="sprayAnimationLabel" text="Nozzle Ready (Idle)" styleClass="muted-text"/>
+                        </VBox>
+                    </HBox>
+
+                    <Label text="Last Command:" styleClass="field-label"/>
+                    <Label fx:id="activeCommandLabel" text="None" wrapText="true" styleClass="mono-info"/>
+
+                    <Label text="Last Result:" styleClass="field-label"/>
+                    <Label fx:id="lastResultLabel" text="None" wrapText="true" styleClass="mono-info"/>
+
+                    <Separator/>
+
+                    <Label text="4. Local Dispense Test (Offline/Demo)" styleClass="section-title"/>
+                    <HBox spacing="8">
+                        <ComboBox fx:id="demoSlotComboBox" prefWidth="120"/>
+                        <TextField fx:id="demoVolumeField" text="2.0" prefWidth="70" promptText="ml"/>
+                        <Button text="Test Spray" onAction="#handleDemoDispense" styleClass="btn-secondary"/>
+                    </HBox>
+                </VBox>
+            </ScrollPane>
+
+            <!-- CENTER COLUMN: CARTRIDGE SLOTS -->
+            <VBox spacing="10" styleClass="card-panel">
+                <padding><Insets top="14" right="14" bottom="14" left="14"/></padding>
+                <HBox alignment="CENTER_LEFT" spacing="10">
+                    <Label text="Fragrance Cartridge Slots (SQLite Persisted)" styleClass="section-title"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button text="Refill All 100%" onAction="#handleRefillAll" styleClass="btn-secondary"/>
+                    <Button text="Delete Slot" onAction="#handleDeleteSelectedSlot" styleClass="btn-danger-outline"/>
+                </HBox>
+
+                <TableView fx:id="slotTableView" VBox.vgrow="ALWAYS">
+                    <columns>
+                        <TableColumn fx:id="colSlotId" text="Slot ID" prefWidth="85"/>
+                        <TableColumn fx:id="colFragrance" text="Fragrance" prefWidth="145"/>
+                        <TableColumn fx:id="colRemaining" text="Remaining / Cap" prefWidth="125"/>
+                        <TableColumn fx:id="colStatus" text="Status" prefWidth="75"/>
+                        <TableColumn fx:id="colLevelBar" text="Fluid Level" prefWidth="130"/>
+                    </columns>
+                </TableView>
+
+                <TitledPane text="Add / Update Cartridge Slot" expanded="true">
+                    <GridPane hgap="8" vgap="8">
+                        <TextField fx:id="newSlotIdField" promptText="SLOT-5" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <TextField fx:id="newFragranceField" promptText="Fragrance Name" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                        <TextField fx:id="newRemainingField" promptText="Remaining (ml)" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <TextField fx:id="newCapacityField" promptText="Capacity (ml)" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                        <Button text="Save Slot" onAction="#handleSaveSlot" maxWidth="Infinity"
+                                styleClass="btn-primary" GridPane.columnIndex="2" GridPane.rowIndex="0" GridPane.rowSpan="2"/>
+                    </GridPane>
+                </TitledPane>
+            </VBox>
+
+            <!-- RIGHT COLUMN: MQTT ACTIVITY LOG -->
+            <VBox spacing="10" styleClass="card-panel">
+                <padding><Insets top="14" right="14" bottom="14" left="14"/></padding>
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="MQTT &amp; Device Activity Log" styleClass="section-title"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button text="Clear" onAction="#handleClearLog" styleClass="btn-secondary"/>
+                </HBox>
+                <TextArea fx:id="activityLogArea" editable="false" wrapText="true" VBox.vgrow="ALWAYS"
+                          styleClass="log-area"/>
+            </VBox>
+        </SplitPane>
+    </center>
+</BorderPane>
