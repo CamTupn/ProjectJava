@@ -43,6 +43,7 @@ class BusinessFlowIntegrationTest {
     private PasswordEncoder passwordEncoder;
 
     private static final String PASSWORD = "IntegrationTest@123";
+    private static final String NEW_PASSWORD = "IntegrationChanged@456";
 
     private String suffix;
     private String platformToken;
@@ -545,7 +546,7 @@ class BusinessFlowIntegrationTest {
                 "TECHNICIAN"
         );
 
-        String technicianToken = login(username);
+        String technicianToken = loginAfterPasswordChange(username);
 
         mockMvc.perform(
                 get("/api/v1/machine-slots/{id}", slotId)
@@ -601,7 +602,7 @@ class BusinessFlowIntegrationTest {
                 "INVENTORY_STAFF"
         );
 
-        String inventoryToken = login(username);
+        String inventoryToken = loginAfterPasswordChange(username);
 
         Long slotId = createSlot(
                 inventoryToken,
@@ -784,29 +785,54 @@ class BusinessFlowIntegrationTest {
     // =====================================================
 
     private String login(String username) throws Exception {
-
-        MvcResult result = mockMvc.perform(
+            return login(username, PASSWORD);
+    }
+    private String login(
+                    String username,
+                    String password) throws Exception {
+            MvcResult result = mockMvc.perform(
                 post("/api/v1/auth/login")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "usernameOrEmail": "%s",
-                                    "password": "%s"
-                                }
-                                """.formatted(username, PASSWORD))
-        )
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
-        .andReturn();
+                                .contentType("application/json")
+                                .content("""
+                                        {"usernameOrEmail": "%s","password": "%s"}""".formatted(username, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andReturn();
 
-        return JsonPath.read(
+            return JsonPath.read(
                 result.getResponse().getContentAsString(),
-                "$.data.accessToken"
-        );
+                "$.data.accessToken");
     }
 
-    private TenantContext createTenantContext(String label)
-            throws Exception {
+    private String loginAfterPasswordChange( String username) throws Exception {
+            // 1. Login with temporary password
+            String temporaryToken = login(username, PASSWORD);
+            // 2. Verify forced password change flag
+            mockMvc.perform(get("/api/v1/auth/me").header("Authorization",bearer(temporaryToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.mustChangePassword").value(true));
+            // 3. Change temporary password
+            mockMvc.perform(post("/api/v1/auth/change-password")
+                 .header("Authorization",bearer(temporaryToken)).contentType("application/json")
+                        .content("""
+                                {"currentPassword": "%s", "newPassword": "%s"}
+                                """.formatted(PASSWORD, NEW_PASSWORD)))
+                        .andExpect(status().isOk());
+            // 4. Verify old JWT is revoked
+            mockMvc.perform(get("/api/v1/auth/me").header("Authorization",bearer(temporaryToken)))
+                        .andExpect(status().isUnauthorized());
+            // 5. Login again with new password
+            String newToken = login(username, NEW_PASSWORD);
+            // 6. Verify password change is completed
+            mockMvc.perform(get("/api/v1/auth/me").header("Authorization",bearer(newToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.mustChangePassword").value(false));
+            return newToken;
+    }
+
+        private TenantContext createTenantContext(
+                String label
+        ) throws Exception {
 
         String code = ("BF_" + label + "_" + suffix)
                 .toUpperCase(java.util.Locale.ROOT);
@@ -816,8 +842,8 @@ class BusinessFlowIntegrationTest {
                 platformToken,
                 """
                 {
-                    "name": "Business Tenant %s %s",
-                    "code": "%s"
+                        "name": "Business Tenant %s %s",
+                        "code": "%s"
                 }
                 """.formatted(label, suffix, code)
         );
@@ -832,11 +858,14 @@ class BusinessFlowIntegrationTest {
                 "BRAND_ADMIN"
         );
 
+        // Complete mandatory password change
+        String brandToken = loginAfterPasswordChange(username);
+
         return new TenantContext(
                 tenantId,
-                login(username)
+                brandToken
         );
-    }
+        }
 
     private Long createUser(
             String token,

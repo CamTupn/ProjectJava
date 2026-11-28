@@ -14,6 +14,7 @@ import com.scentstation.entity.Role;
 import com.scentstation.entity.Tenant;
 import com.scentstation.repository.RoleRepository;
 import com.scentstation.repository.TenantRepository;
+import com.scentstation.dto.request.ResetPasswordRequest;
 
 import jakarta.transaction.Transactional;
 
@@ -38,6 +39,7 @@ public class UserService {
         private final TenantRepository tenantRepository;
         private final RoleRepository roleRepository;
         private final PasswordEncoder passwordEncoder;
+        private final PasswordService passwordService;
 
         public UserService(
                 UserRepository userRepository,
@@ -45,7 +47,8 @@ public class UserService {
                 CurrentUserService currentUserService,
                 TenantRepository tenantRepository,
                 RoleRepository roleRepository,
-                PasswordEncoder passwordEncoder) {
+                PasswordEncoder passwordEncoder,
+                PasswordService passwordService){
 
             this.userRepository = userRepository;
             this.userMapper = userMapper;
@@ -53,6 +56,14 @@ public class UserService {
             this.tenantRepository = tenantRepository;
             this.roleRepository = roleRepository;
             this.passwordEncoder = passwordEncoder;
+            this.passwordService = passwordService;
+        }
+
+        public void resetPassword(
+                        Long userId,
+                        ResetPasswordRequest request) {
+
+                passwordService.resetPassword(userId, request);
         }
 
     // 1. Xem danh sách người dùng
@@ -119,41 +130,71 @@ public class UserService {
 
     // 4. Quản lý trạng thái tài khoản
     public UserResponse updateUserStatus(
-            Long userId,
-            String status) {
+                    Long userId,
+                    String status) {
 
-        User user = findAccessibleUser(userId);
+            CurrentUserPrincipal current = currentUserService.getCurrentUser();
 
-        validateUserManagementPermission(user);
+            // 1. Find and lock target user
+            User user = userRepository.findByIdForUpdate(userId)
+                            .orElseThrow(() -> new ResourceNotFoundException(
+                                            "User not found with ID: " + userId));
 
-        String normalizedStatus =
-                status.trim().toUpperCase();
+            // 2. Validate tenant isolation
+            if (!current.isPlatformSuperAdmin()) {
 
-        if (!List.of("ACTIVE", "LOCKED", "INACTIVE")
-                .contains(normalizedStatus)) {
+                    if (current.tenantId() == null
+                                    || user.getTenant() == null
+                                    || !current.tenantId().equals(
+                                                    user.getTenant().getId())) {
 
-            throw new IllegalArgumentException(
-                    "Invalid user status. Allowed: ACTIVE, LOCKED, INACTIVE"
-            );
-        }
+                            throw new ResourceNotFoundException(
+                                            "User not found with ID: " + userId);
+                    }
+            }
 
-        CurrentUserPrincipal current =
-                currentUserService.getCurrentUser();
+            // 3. Validate management permission
+            validateUserManagementPermission(user);
 
-        // Không cho phép tự khóa hoặc vô hiệu hóa tài khoản
-        if (user.getId().equals(current.userId())
-                && !"ACTIVE".equals(normalizedStatus)) {
+            // 4. Normalize status
+            if (status == null || status.isBlank()) {
+                    throw new IllegalArgumentException(
+                                    "User status is required");
+            }
 
-            throw new IllegalArgumentException(
-                    "You cannot lock or deactivate your own account"
-            );
-        }
+            String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
 
-        user.setStatus(normalizedStatus);
+            if (!List.of("ACTIVE", "LOCKED", "INACTIVE")
+                            .contains(normalizedStatus)) {
 
-        User savedUser = userRepository.save(user);
+                    throw new IllegalArgumentException(
+                                    "Invalid user status. Allowed: ACTIVE, LOCKED, INACTIVE");
+            }
 
-        return userMapper.toResponse(savedUser);
+            // 5. Prevent self-lock or self-deactivation
+            if (user.getId().equals(current.userId())
+                            && !"ACTIVE".equals(normalizedStatus)) {
+
+                    throw new IllegalArgumentException(
+                                    "You cannot lock or deactivate your own account");
+            }
+
+            // 6. Return current state if nothing changes
+            if (normalizedStatus.equals(user.getStatus())) {
+                    return userMapper.toResponse(user);
+            }
+
+            // 7. Update status
+            user.setStatus(normalizedStatus);
+
+            // 8. Revoke existing access tokens
+            user.setTokenVersion(
+                            user.getTokenVersion() + 1);
+
+            // 9. Persist changes
+            User savedUser = userRepository.save(user);
+
+            return userMapper.toResponse(savedUser);
     }
 
     // Kiểm tra quyền truy cập theo tenant
@@ -358,6 +399,7 @@ public class UserService {
            user.setPasswordHash(
                            passwordEncoder.encode(request.getPassword()));
 
+           user.setMustChangePassword(true);
            user.setTenant(tenant);
            user.setStatus("ACTIVE");
 

@@ -78,3 +78,60 @@ Số lượng bảng dự kiến: 21.
 - Các thao tác tạo đơn hàng, thanh toán, xịt nước hoa và cập nhật tồn kho cần được kiểm soát ở backend.
 - Chỉ ghi nhận giảm tồn kho bán hàng sau khi kết quả xịt thành công đã được xác nhận.
 - Cần đối chiếu schema với ERD và Data Dictionary trước khi nghiệm thu.
+
+## 8. Database Migration — Account Security
+
+Migration file:
+
+`database/migrations/001_account_security.sql`
+
+### Existing database
+
+Đối với thành viên đã có database từ Sprint 4:
+
+1. Dừng backend.
+2. Sao lưu database hiện tại.
+3. Mở MySQL Workbench.
+4. Chọn database cần cập nhật.
+5. Kiểm tra cấu trúc bảng users.
+
+```sql
+USE scentstation;
+
+DESCRIBE users;
+```
+
+Nếu cả hai cột bảo mật chưa tồn tại, thực thi migration:
+
+```sql
+ALTER TABLE users
+ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT FALSE AFTER password_hash,
+ADD COLUMN token_version BIGINT NOT NULL DEFAULT 0 AFTER must_change_password;
+```
+
+Kiểm tra kết quả:
+
+```sql
+SELECT
+    id,
+    username,
+    must_change_password,
+    token_version
+FROM users;
+```
+
+Thực hiện tương tự cho database `scentstation_test` nếu sử dụng integration tests.
+
+Nếu cả hai cột đã tồn tại thì bỏ qua migration. Nếu chỉ tồn tại một cột, cần kiểm tra và bổ sung riêng cột còn thiếu.
+
+### New database
+
+Đối với database mới, sử dụng `database/schema.sql` đã cập nhật. Không cần chạy lại migration này.
+
+### Important notes
+
+- Không xóa database hiện có để cập nhật schema.
+- Migration không xóa dữ liệu tài khoản.
+- Không chạy migration nhiều lần.
+- JWT được cấp từ phiên bản backend cũ cần được thay thế bằng cách đăng nhập lại.
+- Không commit mật khẩu, JWT, file backup hoặc thông tin kết nối database lên Git.

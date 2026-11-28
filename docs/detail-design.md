@@ -1085,3 +1085,52 @@ sequenceDiagram
 ```
 
 Integration: 4 database + 21 authentication + 14 business flow, MockMvc và MySQL thật, rollback fixture. 341 regression PASS; không chứng minh E2E mạng hoặc concurrency.
+
+## Account Management & Tenant Identity
+
+### Components
+
+| Component | Responsibility |
+|---|---|
+| AuthController | Login, profile and password change endpoints |
+| UserController | Administrative user management and password reset |
+| AuthService | Authentication and tenant identity |
+| ProfileService | Current user profile retrieval |
+| PasswordService | Password management |
+| UserService | User management and administrative scope |
+| JwtService | JWT generation and validation |
+| JwtAuthenticationFilter | Authentication, token revocation and mandatory password change enforcement |
+| CurrentUserPrincipal | Authenticated user context |
+| UserRepository | User persistence |
+| User | Account entity and security attributes |
+
+### Password change workflow
+
+1. User sends current password and new password with a valid JWT.
+2. Backend authenticates the request.
+3. PasswordService validates the current password.
+4. The new password is encoded using BCrypt.
+5. The password change requirement is cleared.
+6. Token version is incremented.
+7. Previous JWT access tokens become invalid.
+8. User authenticates again.
+
+### Administrator password reset workflow
+
+1. Administrator requests a password reset for a target user.
+2. Backend verifies role permissions and tenant scope.
+3. The temporary password is encoded and stored.
+4. The mandatory password change flag is enabled.
+5. Token version is incremented.
+6. User authenticates using the temporary password.
+7. Business APIs remain restricted until the password is changed.
+
+### Tenant Identity
+
+Tenant identity is obtained from the authenticated account and its associated tenant.
+
+Frontend uses tenantName for display purposes. Backend authorization does not rely on tenant information supplied by the frontend.
+
+### Security boundary
+
+The frontend is responsible for navigation and user experience. Spring Security and backend services remain responsible for authentication, authorization, tenant isolation and password policy enforcement.

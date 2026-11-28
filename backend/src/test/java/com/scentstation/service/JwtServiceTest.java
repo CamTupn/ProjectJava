@@ -111,4 +111,56 @@ class JwtServiceTest {
         assertFalse(shortLivedJwtService.isTokenValid(
                 token, "brandadmin"));
     }
+
+    // Test 7: Extract token version
+    @Test
+    void shouldExtractTokenVersion() {
+
+            Map<String, Object> claims = new HashMap<>();
+
+            claims.put("userId", 1L);
+            claims.put("tokenVersion", 3L);
+
+            String token = jwtService.generateToken(
+                            "brandadmin",
+                            claims);
+
+            assertEquals(
+                            3L,
+                            jwtService.extractTokenVersion(token));
+    }
+
+    // Test 8: Missing token version
+    @Test
+    void shouldReturnNullWhenTokenVersionIsMissing() {
+
+            Map<String, Object> claims = new HashMap<>();
+
+            claims.put("userId", 1L);
+
+            String token = jwtService.generateToken(
+                            "brandadmin",
+                            claims);
+
+            assertNull(
+                            jwtService.extractTokenVersion(token));
+    }
+
+    // Test 9: Initial token version
+    @Test
+    void shouldExtractInitialTokenVersion() {
+
+            Map<String, Object> claims = new HashMap<>();
+
+            claims.put("userId", 1L);
+            claims.put("tokenVersion", 0L);
+
+            String token = jwtService.generateToken(
+                            "brandadmin",
+                            claims);
+
+            assertEquals(
+                            0L,
+                            jwtService.extractTokenVersion(token));
+    }
 }

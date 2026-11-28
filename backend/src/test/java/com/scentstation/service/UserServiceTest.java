@@ -54,6 +54,9 @@ class UserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private PasswordService passwordService;
+
     @InjectMocks
     private UserService userService;
 
@@ -282,30 +285,24 @@ class UserServiceTest {
     @Test
     void brandAdminShouldLockEmployeeInSameTenant() {
 
-        mockCurrentUser(
-                20L,
-                1L,
-                "BRAND_ADMIN"
-        );
+            mockCurrentUser(
+                            20L,
+                            1L,
+                            "BRAND_ADMIN");
 
-        when(userRepository.findByIdAndTenant_Id(
-                10L, 1L
-        )).thenReturn(Optional.of(employeeA));
+            when(userRepository.findByIdForUpdate(10L))
+                            .thenReturn(Optional.of(employeeA));
 
-        when(userRepository.save(employeeA))
-                .thenReturn(employeeA);
+            when(userRepository.save(employeeA))
+                            .thenReturn(employeeA);
 
-        userService.updateUserStatus(
-                10L,
-                "LOCKED"
-        );
+            userService.updateUserStatus(10L, "LOCKED");
 
-        assertEquals(
-                "LOCKED",
-                employeeA.getStatus()
-        );
+            assertEquals("LOCKED", employeeA.getStatus());
+            assertEquals(1L, employeeA.getTokenVersion());
 
-        verify(userRepository).save(employeeA);
+            verify(userRepository).findByIdForUpdate(10L);
+            verify(userRepository).save(employeeA);
     }
 
     // =========================================
@@ -315,26 +312,24 @@ class UserServiceTest {
     @Test
     void brandAdminShouldNotLockAnotherBrandAdmin() {
 
-        mockCurrentUser(
-                20L,
-                1L,
-                "BRAND_ADMIN"
-        );
+            mockCurrentUser(
+                            20L,
+                            1L,
+                            "BRAND_ADMIN");
 
-        when(userRepository.findByIdAndTenant_Id(
-                21L, 1L
-        )).thenReturn(Optional.of(brandAdminB));
+            when(userRepository.findByIdForUpdate(21L))
+                            .thenReturn(Optional.of(brandAdminB));
 
-        assertThrows(
-                AccessDeniedException.class,
-                () -> userService.updateUserStatus(
-                        21L,
-                        "LOCKED"
-                )
-        );
+            assertThrows(
+                            AccessDeniedException.class,
+                            () -> userService.updateUserStatus(
+                                            21L,
+                                            "LOCKED"));
 
-        verify(userRepository, never())
-                .save(any(User.class));
+            assertEquals(0L, brandAdminB.getTokenVersion());
+
+            verify(userRepository, never())
+                            .save(any(User.class));
     }
 
     // =========================================
@@ -344,32 +339,30 @@ class UserServiceTest {
     @Test
     void superAdminShouldNotLockOwnAccount() {
 
-        mockCurrentUser(
-                1L,
-                null,
-                "PLATFORM_SUPER_ADMIN"
-        );
+            mockCurrentUser(
+                            1L,
+                            null,
+                            "PLATFORM_SUPER_ADMIN");
 
-        User superAdmin = createUser(
-                1L,
-                null,
-                "platform_admin",
-                "PLATFORM_SUPER_ADMIN"
-        );
+            User superAdmin = createUser(
+                            1L,
+                            null,
+                            "platform_admin",
+                            "PLATFORM_SUPER_ADMIN");
 
-        when(userRepository.findById(1L))
-                .thenReturn(Optional.of(superAdmin));
+            when(userRepository.findByIdForUpdate(1L))
+                            .thenReturn(Optional.of(superAdmin));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> userService.updateUserStatus(
-                        1L,
-                        "LOCKED"
-                )
-        );
+            assertThrows(
+                            IllegalArgumentException.class,
+                            () -> userService.updateUserStatus(
+                                            1L,
+                                            "LOCKED"));
 
-        verify(userRepository, never())
-                .save(any(User.class));
+            assertEquals(0L, superAdmin.getTokenVersion());
+
+            verify(userRepository, never())
+                            .save(any(User.class));
     }
 
     // =========================================
@@ -379,27 +372,26 @@ class UserServiceTest {
     @Test
     void invalidUserStatusShouldBeRejected() {
 
-        mockCurrentUser(
-                1L,
-                null,
-                "PLATFORM_SUPER_ADMIN"
-        );
+            mockCurrentUser(
+                            1L,
+                            null,
+                            "PLATFORM_SUPER_ADMIN");
 
-        when(userRepository.findById(10L))
-                .thenReturn(Optional.of(employeeA));
+            when(userRepository.findByIdForUpdate(10L))
+                            .thenReturn(Optional.of(employeeA));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> userService.updateUserStatus(
-                        10L,
-                        "DELETED"
-                )
-        );
+            assertThrows(
+                            IllegalArgumentException.class,
+                            () -> userService.updateUserStatus(
+                                            10L,
+                                            "DELETED"));
 
-        verify(userRepository, never())
-                .save(any(User.class));
+            assertEquals("ACTIVE", employeeA.getStatus());
+            assertEquals(0L, employeeA.getTokenVersion());
+
+            verify(userRepository, never())
+                            .save(any(User.class));
     }
-
     // =========================================
     // TEST 10: EMPLOYEE CANNOT MANAGE USERS
     // =========================================
@@ -536,6 +528,8 @@ class UserServiceTest {
             assertEquals("ACTIVE", savedUser.getStatus());
             assertEquals(tenantA, savedUser.getTenant());
             assertEquals("encoded-password", savedUser.getPasswordHash());
+            assertTrue(savedUser.isMustChangePassword());
+            assertEquals(0L, savedUser.getTokenVersion());
 
             assertEquals(
                             Set.of("BRAND_ADMIN"),
@@ -568,6 +562,8 @@ class UserServiceTest {
             assertEquals(
                             1L,
                             captor.getValue().getTenant().getId());
+            assertTrue(captor.getValue().isMustChangePassword());
+            assertEquals(0L, captor.getValue().getTokenVersion());
     }
 
     @Test
@@ -865,5 +861,122 @@ class UserServiceTest {
 
             when(userRepository.saveAndFlush(any(User.class)))
                             .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    void unlockingUserShouldIncrementTokenVersion() {
+
+            mockCurrentUser(
+                            20L,
+                            1L,
+                            "BRAND_ADMIN");
+
+            employeeA.setStatus("LOCKED");
+            employeeA.setTokenVersion(3L);
+
+            when(userRepository.findByIdForUpdate(10L))
+                            .thenReturn(Optional.of(employeeA));
+
+            when(userRepository.save(employeeA))
+                            .thenReturn(employeeA);
+
+            userService.updateUserStatus(10L, "ACTIVE");
+
+            assertEquals("ACTIVE", employeeA.getStatus());
+            assertEquals(4L, employeeA.getTokenVersion());
+
+            verify(userRepository).save(employeeA);
+    }
+
+    @Test
+    void unchangedStatusShouldNotIncrementTokenVersion() {
+
+            mockCurrentUser(
+                            20L,
+                            1L,
+                            "BRAND_ADMIN");
+
+            employeeA.setStatus("ACTIVE");
+            employeeA.setTokenVersion(5L);
+
+            when(userRepository.findByIdForUpdate(10L))
+                            .thenReturn(Optional.of(employeeA));
+
+            userService.updateUserStatus(10L, "ACTIVE");
+
+            assertEquals("ACTIVE", employeeA.getStatus());
+            assertEquals(5L, employeeA.getTokenVersion());
+
+            verify(userRepository, never())
+                            .save(any(User.class));
+    }
+
+    @Test
+    void brandAdminShouldNotChangeOtherTenantUserStatus() {
+
+            mockCurrentUser(
+                            20L,
+                            1L,
+                            "BRAND_ADMIN");
+
+            when(userRepository.findByIdForUpdate(30L))
+                            .thenReturn(Optional.of(employeeB));
+
+            assertThrows(
+                            ResourceNotFoundException.class,
+                            () -> userService.updateUserStatus(
+                                            30L,
+                                            "LOCKED"));
+
+            assertEquals("ACTIVE", employeeB.getStatus());
+            assertEquals(0L, employeeB.getTokenVersion());
+
+            verify(userRepository, never())
+                            .save(any(User.class));
+    }
+
+    @Test
+    void deactivatingUserShouldIncrementTokenVersion() {
+
+            mockCurrentUser(
+                            1L,
+                            null,
+                            "PLATFORM_SUPER_ADMIN");
+
+            employeeA.setTokenVersion(2L);
+
+            when(userRepository.findByIdForUpdate(10L))
+                            .thenReturn(Optional.of(employeeA));
+
+            when(userRepository.save(employeeA))
+                            .thenReturn(employeeA);
+
+            userService.updateUserStatus(10L, "INACTIVE");
+
+            assertEquals("INACTIVE", employeeA.getStatus());
+            assertEquals(3L, employeeA.getTokenVersion());
+
+            verify(userRepository).save(employeeA);
+    }
+
+    @Test
+    void updateStatusShouldRejectNonexistentUser() {
+
+            mockCurrentUser(
+                            1L,
+                            null,
+                            "PLATFORM_SUPER_ADMIN");
+
+            when(userRepository.findByIdForUpdate(999L))
+                            .thenReturn(Optional.empty());
+
+            assertThrows(
+                            ResourceNotFoundException.class,
+                            () -> userService.updateUserStatus(
+                                            999L,
+                                            "LOCKED"));
+
+            verify(userRepository, never())
+                            .save(any(User.class));
     }
 }

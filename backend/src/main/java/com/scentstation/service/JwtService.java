@@ -161,4 +161,19 @@ public class JwtService {
             return false;
         }
     }
+
+    public Long extractTokenVersion(String token) {
+
+        Object version = extractClaim(
+                token,
+                claims -> claims.get("tokenVersion"));
+
+        if (version instanceof Integer
+                || version instanceof Long) {
+
+            return ((Number) version).longValue();
+        }
+
+        return null;
+    }
 }
