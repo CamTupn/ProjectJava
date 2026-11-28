@@ -1,0 +1,10 @@
+target/
+.idea/
+*.iml
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+.env
+*.log
